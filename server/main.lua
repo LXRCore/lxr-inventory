@@ -21,12 +21,16 @@
 local LXRCore = exports['lxr-core']:GetCoreObject()
 local RES = GetCurrentResourceName()
 
-local sessions = {}   -- source → { other = container|nil, otherId = string|nil }
+local sessions = {}   -- source → { other, otherId, kind, anchor = vector3|nil, range }
+local pendingOpen = {} -- source → { token, kind, id, data, coords }
 local stashes = {}    -- id → container (loaded lazily)
-local drops = {}      -- id → container + coords + createdAt
+local drops = {}      -- id → container + coords + createdAt + owner
 local shops = {}      -- id → container (items carry price)
 local buckets = {}
+local lastUse, lastGive, lastDropCreate = {}, {}, {}
+local dropsByOwner = {} -- citizenid → count
 local nextDrop = 0
+local openToken = 0
 
 local function limited(src)
     local rl = Config.Security.rateLimit
@@ -35,6 +39,27 @@ end
 
 local function notify(src, key, kind, vars)
     TriggerClientEvent('LXRCore:Notify', src, Lang:t(key, vars), kind or 'error')
+end
+
+---Player state checks shared by every action.
+local function blocked(src, Player, allowCuffed)
+    local md = Player.PlayerData.metadata or {}
+    if Config.General.blockWhenDead and md.isdead then notify(src, 'error.dead') return true end
+    if Config.General.blockWhenCuffed and md.ishandcuffed and not allowCuffed then notify(src, 'error.cuffed') return true end
+    return false
+end
+
+local function cooldown(tbl, src, ms)
+    local now = GetGameTimer()
+    if tbl[src] and now - tbl[src] < ms then return true end
+    tbl[src] = now
+    return false
+end
+
+local function distanceTo(src, coords)
+    local ped = GetPlayerPed(src)
+    if ped == 0 or not coords then return math.huge end
+    return #(GetEntityCoords(ped) - vector3(coords.x, coords.y, coords.z))
 end
 
 local function playerContainer(Player)
@@ -92,15 +117,18 @@ local function broadcastDrops()
     TriggerClientEvent('lxr-inventory:client:drops', -1, list)
 end
 
-local function createDrop(coords)
+local function createDrop(coords, owner)
     nextDrop = nextDrop + 1
     local id = ('drop-%d'):format(nextDrop)
     drops[id] = Containers.New(id, 'drop', {}, Config.Drops.slots, Config.Drops.weight, Lang:t('ui.ground'),
-        { coords = coords, createdAt = GetGameTimer() })
+        { coords = coords, createdAt = GetGameTimer(), owner = owner })
+    if owner then dropsByOwner[owner] = (dropsByOwner[owner] or 0) + 1 end
     return drops[id]
 end
 
 local function removeDrop(id)
+    local d = drops[id]
+    if d and d.owner and dropsByOwner[d.owner] then dropsByOwner[d.owner] = math.max(0, dropsByOwner[d.owner] - 1) end
     drops[id] = nil
     for src, s in pairs(sessions) do
         if s.otherId == id then
@@ -146,11 +174,12 @@ local function buildShop(id, data)
             items[slot] = {
                 name = itemDef.name, amount = tonumber(entry.amount) or 100, info = entry.info or {}, label = itemDef.label,
                 description = itemDef.description or '', weight = itemDef.weight, type = itemDef.type, unique = itemDef.unique,
-                useable = itemDef.useable, image = itemDef.image, slot = slot, price = tonumber(entry.price) or 0,
+                useable = itemDef.useable, image = itemDef.image, slot = slot, price = math.max(0, tonumber(entry.price) or 0),
             }
         end
     end
-    local c = Containers.New(id, 'shop', items, math.max(slot, 1), math.huge, def.label or id, { account = def.account or Config.Shops.account })
+    local c = Containers.New(id, 'shop', items, math.max(slot, 1), math.huge, def.label or id,
+        { account = def.account or Config.Shops.account, coords = def.coords, distance = def.distance or 3.0 })
     shops[id] = c
     return c
 end
@@ -179,7 +208,25 @@ end
 local function resolveOther(src, Player, kind, id, data)
     if kind == 'stash' then
         if type(id) ~= 'string' or id == '' or #id > 100 then return nil, 'invalid' end
-        return getStash(id, data)
+        -- access rules supplied by the resource that owns the stash
+        if type(data) == 'table' then
+            local pd = Player.PlayerData
+            local function inList(v, wanted)
+                if type(wanted) == 'table' then
+                    for _, w in ipairs(wanted) do if w == v then return true end end
+                    return false
+                end
+                return wanted == nil or wanted == v
+            end
+            if data.owner ~= nil and not inList(pd.citizenid, data.owner) then return nil, 'no_permission' end
+            if data.job ~= nil and not inList(pd.job.name, data.job) then return nil, 'no_permission' end
+            if data.gang ~= nil and not inList(pd.gang.name, data.gang) then return nil, 'no_permission' end
+            if data.jobGrade ~= nil and (pd.job.grade.level or 0) < tonumber(data.jobGrade) then return nil, 'no_permission' end
+            if data.coords and distanceTo(src, data.coords) > (tonumber(data.distance) or Config.General.sessionRange) then return nil, 'too_far' end
+        end
+        local c = getStash(id, data)
+        if type(data) == 'table' and data.coords then c.coords, c.distance = data.coords, tonumber(data.distance) end
+        return c
     elseif kind == 'drop' then
         local d = drops[id]
         if not d then return nil, 'invalid' end
@@ -191,7 +238,10 @@ local function resolveOther(src, Player, kind, id, data)
         local coords = GetEntityCoords(ped)
         local d = nearestDrop(coords, Config.Drops.pickupRange)
         if not d then
-            d = createDrop({ x = coords.x, y = coords.y, z = coords.z })
+            local cid = Player.PlayerData.citizenid
+            if (dropsByOwner[cid] or 0) >= (Config.Drops.maxPerPlayer or 3) then return nil, 'too_many_drops' end
+            if cooldown(lastDropCreate, src, Config.Drops.createCooldownMs or 3000) then return nil, 'too_fast' end
+            d = createDrop({ x = coords.x, y = coords.y, z = coords.z }, cid)
             broadcastDrops()
         end
         return d
@@ -199,6 +249,7 @@ local function resolveOther(src, Player, kind, id, data)
         if type(id) ~= 'string' then return nil, 'invalid' end
         local c = shops[id] or buildShop(id, data)
         if not c then return nil, 'invalid' end
+        if c.coords and distanceTo(src, c.coords) > (c.distance or 3.0) then return nil, 'too_far' end
         return c
     elseif kind == 'otherplayer' then
         local target = LXRCore.Functions.GetPlayer(tonumber(id))
@@ -212,9 +263,18 @@ local function resolveOther(src, Player, kind, id, data)
     return nil, 'invalid'
 end
 
-local function open(src, kind, id, data)
-    local Player = LXRCore.Functions.GetPlayer(src)
-    if not Player then return end
+local function anchorFor(other)
+    if not other then return nil, nil end
+    if other.kind == 'drop' then return other.coords, Config.Drops.pickupRange + 1.0 end
+    if other.kind == 'otherplayer' and other.player then
+        local ped = GetPlayerPed(other.player.PlayerData.source)
+        return ped ~= 0 and GetEntityCoords(ped) or nil, Config.General.searchDistance + 1.0
+    end
+    if other.coords then return other.coords, (other.distance or Config.General.sessionRange) + 1.0 end
+    return nil, nil
+end
+
+local function finishOpen(src, Player, kind, id, data)
     local other, err
     if kind then
         other, err = resolveOther(src, Player, kind, id, data)
@@ -225,11 +285,45 @@ local function open(src, kind, id, data)
         end
         other.openBy = src
     end
-    sessions[src] = { other = other, otherId = other and other.id or nil, kind = other and other.kind or nil }
-    TriggerClientEvent('lxr-inventory:client:open', src, Containers.View(playerContainer(Player)), other and Containers.View(other) or nil)
+    local anchor, range = anchorFor(other)
+    sessions[src] = { other = other, otherId = other and other.id or nil, kind = other and other.kind or nil, anchor = anchor, range = range, moves = 0 }
+    TriggerClientEvent('lxr-inventory:client:open', src, Containers.View(playerContainer(Player)), other and Containers.View(other) or nil,
+        anchor and { x = anchor.x, y = anchor.y, z = anchor.z, range = range } or nil)
+end
+
+local function open(src, kind, id, data)
+    local Player = LXRCore.Functions.GetPlayer(src)
+    if not Player then return end
+    if blocked(src, Player, false) then return end
+    if sessions[src] then close(src) end
+    local delay = kind and (Config.General.openDelayMs[kind] or 0) or 0
+    if delay <= 0 then return finishOpen(src, Player, kind, id, data) end
+
+    -- validate now so the player is not shown a bar for something they cannot open
+    local probe, err = resolveOther(src, Player, kind, id, data)
+    if not probe then return notify(src, 'error.' .. (err or 'invalid')) end
+
+    openToken = openToken + 1
+    local token = openToken
+    local startCoords = GetEntityCoords(GetPlayerPed(src))
+    pendingOpen[src] = { token = token, kind = kind, id = id, data = data, coords = startCoords }
+    TriggerClientEvent('lxr-inventory:client:progress', src, kind, delay)
+    SetTimeout(delay, function()
+        local p = pendingOpen[src]
+        if not p or p.token ~= token then return end
+        pendingOpen[src] = nil
+        local P = LXRCore.Functions.GetPlayer(src)
+        if not P then return end
+        if distanceTo(src, startCoords) > (Config.General.cancelMoveDistance or 1.5) + 0.5 then
+            TriggerClientEvent('lxr-inventory:client:progressCancel', src)
+            return notify(src, 'error.cancelled')
+        end
+        finishOpen(src, P, kind, id, data)
+    end)
 end
 
 local function close(src)
+    pendingOpen[src] = nil
     local s = sessions[src]
     if not s then return end
     if s.other then
@@ -260,12 +354,29 @@ end
 -- 📡 EVENTS
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-RegisterNetEvent('lxr-inventory:server:open', function(kind, id, data)
+local function clientOpen(src, kind, id)
+    if kind == nil or kind == 'player' then return open(src, nil) end
+    if type(kind) ~= 'string' or not Config.Security.clientOpenKinds[kind] then
+        return LXRCore.Log.exploit(src, 'client asked to open a restricted container kind', { kind = tostring(kind), id = tostring(id) })
+    end
+    if kind == 'shop' and not Config.Shops.registered[id] then
+        return LXRCore.Log.exploit(src, 'client asked to open an unregistered shop', { id = tostring(id) })
+    end
+    open(src, kind, id, nil)
+end
+
+RegisterNetEvent('lxr-inventory:server:open', function(kind, id)
     local src = source
     if limited(src) then return end
-    if kind ~= nil and type(kind) ~= 'string' then return end
-    -- data from clients is only honoured for shops registered in config; others resources pass data server-side
-    open(src, kind, id, nil)
+    clientOpen(src, kind, id)
+end)
+
+RegisterNetEvent('lxr-inventory:server:cancelOpen', function()
+    local src = source
+    if pendingOpen[src] then
+        pendingOpen[src] = nil
+        TriggerClientEvent('lxr-inventory:client:progressCancel', src)
+    end
 end)
 
 -- Server-side API for other resources: TriggerEvent('inventory:server:OpenInventory', 'stash', id, { label, slots, maxweight })
@@ -275,12 +386,11 @@ AddEventHandler('inventory:server:OpenInventory', function(kind, id, data)
     if kind == 'player' or kind == nil then return open(src, nil) end
     open(src, kind, id, data)
 end)
--- net variant kept for legacy resources; client-supplied data is ignored
+-- net variant kept for legacy resources; same whitelist as the native client event
 RegisterNetEvent('inventory:server:OpenInventory', function(kind, id)
     local src = source
     if limited(src) then return end
-    if kind == 'player' or kind == nil then return open(src, nil) end
-    open(src, kind, id, nil)
+    clientOpen(src, kind, id)
 end)
 
 RegisterNetEvent('lxr-inventory:server:close', function()
@@ -293,6 +403,21 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
     local Player = LXRCore.Functions.GetPlayer(src)
     local s = sessions[src]
     if not Player or not s then return end
+    if blocked(src, Player, false) then return end
+    if s.anchor and distanceTo(src, s.anchor) > (s.range or Config.General.sessionRange) then
+        close(src)
+        TriggerClientEvent('lxr-inventory:client:close', src)
+        return notify(src, 'error.too_far')
+    end
+    if s.other and s.other.kind == 'otherplayer' and s.other.player then
+        -- the searched player must still be searchable (not revived / uncuffed meanwhile)
+        if not canSearch(Player, s.other.player) or not LXRCore.Players[s.other.player.PlayerData.source] then
+            close(src)
+            TriggerClientEvent('lxr-inventory:client:close', src)
+            return notify(src, 'error.no_permission')
+        end
+    end
+    s.moves = (s.moves or 0) + 1
     local mine = playerContainer(Player)
     local function pick(kind)
         if kind == 'player' then return mine end
@@ -310,7 +435,8 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
         local entry = from.items[tonumber(fromSlot)]
         if not entry then return end
         amount = math.floor(amount or 1)
-        if amount <= 0 or amount > entry.amount then return notify(src, 'error.invalid_amount') end
+        if amount <= 0 or amount > entry.amount or amount > (Config.Shops.maxPerPurchase or 100) then return notify(src, 'error.invalid_amount') end
+        if from.coords and distanceTo(src, from.coords) > (from.distance or 3.0) then return notify(src, 'error.too_far') end
         local price = (entry.price or 0) * amount
         local canSlot = Containers.CanPlace(mine, entry.name, amount, entry.info, toSlot)
         if price > 0 and not Player.Functions.RemoveMoney(from.account, price, 'shop:' .. from.id) then
@@ -337,10 +463,19 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
     if to.kind == 'stash' then to.dirty = true end
     if from ~= to then
         local moved = to.items[tonumber(toSlot)] or from.items[tonumber(fromSlot)]
-        LXRCore.Log.info('inventory', ('%s %s -> %s'):format(action or 'move', from.kind, to.kind),
-            { source = src, item = moved and moved.name, amount = amount, fromId = from.id, toId = to.id })
+        if Config.Security.logMoves then
+            LXRCore.Log.info('inventory', ('%s %s -> %s'):format(action or 'move', from.kind, to.kind),
+                { source = src, item = moved and moved.name, amount = amount, fromId = from.id, toId = to.id, move = s.moves })
+        end
         if to.kind == 'otherplayer' and to.player then
             TriggerClientEvent('inventory:client:ItemBox', to.player.PlayerData.source, LXRShared.Items[moved.name], 'add', amount)
+        end
+        -- weapons leaving the satchel must leave the hands too (weapon resources listen)
+        if moved and moved.type == 'weapon' and from.kind == 'player' then
+            TriggerClientEvent('lxr-inventory:client:weaponRemoved', src, moved.name)
+        end
+        if moved and moved.type == 'weapon' and from.kind == 'otherplayer' and from.player then
+            TriggerClientEvent('lxr-inventory:client:weaponRemoved', from.player.PlayerData.source, moved.name)
         end
     end
     refresh(src)
@@ -355,6 +490,11 @@ RegisterNetEvent('lxr-inventory:server:use', function(slot)
     local item = Player.PlayerData.items[slot]
     if not item then return end
     if not LXRCore.Items.CanUse(item.name) then return notify(src, 'error.not_usable') end
+    local def = LXRShared.Items[item.name] or {}
+    local md = Player.PlayerData.metadata or {}
+    if md.isdead and not def.useWhileDead then return notify(src, 'error.dead') end
+    if md.ishandcuffed and not def.useWhileCuffed then return notify(src, 'error.cuffed') end
+    if cooldown(lastUse, src, Config.General.useCooldownMs or 400) then return end
     if Config.General.closeOnUse and item.shouldClose then close(src) TriggerClientEvent('lxr-inventory:client:close', src) end
     TriggerClientEvent('lxr-inventory:client:useAnim', src)
     LXRCore.Items.Use(src, item)
@@ -368,6 +508,8 @@ RegisterNetEvent('lxr-inventory:server:give', function(target, slot, amount)
     local Target = LXRCore.Functions.GetPlayer(tonumber(target))
     slot = tonumber(slot)
     if not Player or not Target or Target == Player or not slot then return end
+    if blocked(src, Player, false) then return end
+    if cooldown(lastGive, src, Config.General.giveCooldownMs or 1500) then return notify(src, 'error.too_fast') end
     if not within(src, Target.PlayerData.source, Config.General.giveDistance) then return notify(src, 'error.too_far') end
     local item = Player.PlayerData.items[slot]
     if not item then return end
@@ -388,7 +530,7 @@ end)
 
 AddEventHandler('playerDropped', function()
     close(source)
-    buckets[source] = nil
+    buckets[source], lastUse[source], lastGive[source], lastDropCreate[source] = nil, nil, nil, nil
 end)
 
 AddEventHandler('LXRCore:Server:OnPlayerUnload', function(src) close(src) end)

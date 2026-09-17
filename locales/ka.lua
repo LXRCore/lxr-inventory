@@ -21,6 +21,17 @@ Locale.Register('ka', {
         in_use            = 'ამას სხვა იყენებს',
         target_full       = 'მას ამის ტარება არ შეუძლია',
         nobody_nearby     = 'ახლოს არავინ არის',
+        cancelled         = 'გაუქმდა',
+        dead              = 'ამას ახლა ვერ გააკეთებთ',
+        cuffed            = 'ხელები შეკრული გაქვთ',
+        too_fast          = 'შეანელეთ',
+        too_many_drops    = 'ძალიან ბევრი ნივთი დატოვეთ მიწაზე',
+    },
+    progress = {
+        default     = 'ძებნა...',
+        stash       = 'სკივრის გახსნა...',
+        drop        = 'ქექვა...',
+        otherplayer = 'ჯიბეების ჩხრეკა...',
     },
     info = {
         item_given = 'ნივთი გადაეცა',

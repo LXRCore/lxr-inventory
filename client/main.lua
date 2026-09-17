@@ -23,6 +23,8 @@ local isOpen = false
 local dropList = {}      -- { { id, coords } }
 local dropProps = {}     -- id → entity
 local nearDrop = nil
+local sessionAnchor = nil  -- { x, y, z, range } while another container is open
+local progressActive = false
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- 🪟 OPEN / CLOSE
@@ -31,7 +33,10 @@ local nearDrop = nil
 local function setOpen(state)
     isOpen = state
     SetNuiFocus(state, state)
-    if not state then SendNUIMessage({ action = 'close' }) end
+    if not state then
+        sessionAnchor = nil
+        SendNUIMessage({ action = 'close' })
+    end
 end
 
 local function requestOpen()
@@ -46,10 +51,71 @@ local function requestOpen()
     end
 end
 
-RegisterNetEvent('lxr-inventory:client:open', function(player, other)
+RegisterNetEvent('lxr-inventory:client:open', function(player, other, anchor)
     isOpen = true
+    progressActive = false
+    sessionAnchor = anchor
     SetNuiFocus(true, true)
     SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), hotbar = Config.Keys.hotbarSlots })
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- ⏳ OPENING PROGRESS (server-timed; the bar here is cosmetic, the server decides)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+RegisterNetEvent('lxr-inventory:client:progress', function(kind, duration)
+    progressActive = true
+    local label = Lang:t('progress.' .. kind) or Lang:t('progress.default')
+    local anim = Config.Progress.animations[kind] or Config.Progress.animations.default
+    LXRCore.Functions.Progressbar('lxr_inventory_open', label, duration, false, true,
+        Config.Progress.disableControls, anim, {}, {},
+        function() end,
+        function()
+            if progressActive then
+                progressActive = false
+                TriggerServerEvent('lxr-inventory:server:cancelOpen')
+            end
+        end)
+    -- moving away cancels locally as well (the server checks distance independently)
+    local start = GetEntityCoords(PlayerPedId())
+    CreateThread(function()
+        while progressActive do
+            Wait(150)
+            if #(GetEntityCoords(PlayerPedId()) - start) > Config.General.cancelMoveDistance then
+                progressActive = false
+                TriggerServerEvent('lxr-inventory:server:cancelOpen')
+                if GetResourceState('progressbar') == 'started' then exports['progressbar']:Cancel() end
+                break
+            end
+        end
+    end)
+end)
+
+RegisterNetEvent('lxr-inventory:client:progressCancel', function()
+    progressActive = false
+    if GetResourceState('progressbar') == 'started' then pcall(function() exports['progressbar']:Cancel() end) end
+end)
+
+-- walk-away closes the UI (the server closes the session on its side on the next move anyway)
+CreateThread(function()
+    while true do
+        Wait(500)
+        if isOpen and sessionAnchor then
+            local d = #(GetEntityCoords(PlayerPedId()) - vector3(sessionAnchor.x, sessionAnchor.y, sessionAnchor.z))
+            if d > (sessionAnchor.range or Config.General.sessionRange) then
+                setOpen(false)
+                TriggerServerEvent('lxr-inventory:server:close')
+            end
+        end
+    end
+end)
+
+-- weapon removed from the satchel while equipped → drop it from the hands too
+RegisterNetEvent('lxr-inventory:client:weaponRemoved', function(name)
+    local ped = PlayerPedId()
+    local hash = joaat(name)
+    if HasPedGotWeapon(ped, hash, 0, false) then RemoveWeaponFromPed(ped, hash, true, 0) end
+    TriggerEvent('lxr-weapons:client:removed', name)
 end)
 
 RegisterNetEvent('lxr-inventory:client:update', function(player, other)

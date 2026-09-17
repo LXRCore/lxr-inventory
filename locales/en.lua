@@ -21,6 +21,17 @@ Locale.Register('en', {
         in_use            = 'Someone else is using this',
         target_full       = 'They cannot carry that',
         nobody_nearby     = 'Nobody nearby',
+        cancelled         = 'Cancelled',
+        dead              = 'You cannot do that right now',
+        cuffed            = 'Your hands are bound',
+        too_fast          = 'Slow down',
+        too_many_drops    = 'You have left too many things on the ground',
+    },
+    progress = {
+        default     = 'Searching...',
+        stash       = 'Opening the chest...',
+        drop        = 'Rummaging...',
+        otherplayer = 'Searching pockets...',
     },
     info = {
         item_given = 'Item given',

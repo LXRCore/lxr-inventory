@@ -32,7 +32,6 @@ Config = Config or {}
 -- ████████████████████████ SERVER BRANDING & INFO ████████████████████████████████
 -- ████████████████████████████████████████████████████████████████████████████████
 
-Config.ServerInfo = { name = 'The Land of Wolves' }
 
 -- ████████████████████████████████████████████████████████████████████████████████
 -- ████████████████████████ LANGUAGE CONFIGURATION ████████████████████████████████
@@ -62,6 +61,15 @@ Config.General = {
     useAnimation    = { dict = 'mech_inspection@weapons@longarms@shotgun_break', anim = 'base', durationMs = 800 }, -- nil = none
     dropAnimation   = { dict = 'mech_pickup@ground', anim = 'putdown_low', durationMs = 900 },
     saveOnClose     = true,  -- Persist the player's inventory when the UI closes (core saves periodically anyway)
+    -- Opening another container takes time (progress bar). The server re-checks distance when the
+    -- timer ends and cancels if the player walked away. 0 = instant.
+    openDelayMs     = { stash = 1200, drop = 700, ground = 0, shop = 0, otherplayer = 2500 },
+    cancelMoveDistance = 1.5,  -- Moving further than this during the progress bar cancels the open
+    sessionRange    = 3.0,     -- Max distance from the container (drop / other player / stash coords) while it is open; checked on every move
+    useCooldownMs   = 400,     -- Minimum time between item uses per player
+    giveCooldownMs  = 1500,    -- Minimum time between gifts per player
+    blockWhenDead   = true,    -- No open / move / use / give while metadata.isdead
+    blockWhenCuffed = true,    -- Same for metadata.ishandcuffed (searching a cuffed player is still allowed)
 }
 
 -- ████████████████████████████████████████████████████████████████████████████████
@@ -86,6 +94,8 @@ Config.Drops = {
     pickupRange  = 2.0,
     marker       = { r = 196, g = 165, b = 116, a = 140 },
     prop         = 'p_sack01x', -- Prop spawned at the drop (nil = marker only)
+    maxPerPlayer = 3,           -- Open drops one player may have created at once
+    createCooldownMs = 3000,    -- Minimum time between creating drops per player
 }
 
 Config.Shops = {
@@ -105,15 +115,35 @@ Config.Shops = {
         },
     },
     account = 'cash',
+    maxPerPurchase = 100,   -- Units of one item per transaction
+    -- Optional per-shop `coords = vector3(...)` + `distance = 3.0` on a registered shop: the server
+    -- refuses to open it (and to sell) when the player is not there.
 }
 
 -- ████████████████████████████████████████████████████████████████████████████████
 -- ████████████████████████ SECURITY & ANTI-ABUSE █████████████████████████████████
 -- ████████████████████████████████████████████████████████████████████████████████
 
+-- ██████████████████████████████████████████████████████████████████████████████
+-- ⏳ PROGRESS (shown while another container is being opened)
+-- ██████████████████████████████████████████████████████████████████████████████
+Config.Progress = {
+    disableControls = { disableMovement = false, disableCarMovement = false, disableMouse = false, disableCombat = true },
+    animations = {
+        default     = { animDict = 'amb_work@world_human_crouch_inspect@male_a@idle_a', anim = 'idle_a', flags = 1 },
+        stash       = { animDict = 'amb_work@world_human_crouch_inspect@male_a@idle_a', anim = 'idle_a', flags = 1 },
+        drop        = { animDict = 'amb_work@world_human_crouch_inspect@male_a@idle_a', anim = 'idle_a', flags = 1 },
+        otherplayer = { animDict = 'mech_inspection@stand@idle_a@base', anim = 'base', flags = 1 },
+    },
+}
+
 Config.Security = {
     rateLimit     = { burst = 40, windowMs = 5000 },
     maxMoveAmount = 10000,
+    -- Kinds a CLIENT may ask to open. Stashes are never in this list: the resource that owns a
+    -- stash opens it server-side with owner / job / gang rules (see README → Stash access).
+    clientOpenKinds = { player = true, ground = true, drop = true, shop = true, otherplayer = true },
+    logMoves      = true,   -- Log every cross-container move through lxr-core (ledger-style)
 }
 
 -- ████████████████████████████████████████████████████████████████████████████████
