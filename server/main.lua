@@ -393,6 +393,13 @@ end)
 
 AddEventHandler('LXRCore:Server:OnPlayerUnload', function(src) close(src) end)
 
+-- Items changed by other resources (usable items, jobs, shops of other scripts) while the UI is open
+AddEventHandler('LXRCore:Server:OnInventoryUpdate', function(src)
+    if sessions[src] then
+        TriggerClientEvent('lxr-inventory:client:update', src, Containers.View(playerContainer(LXRCore.Functions.GetPlayer(src))), sessions[src].other and Containers.View(sessions[src].other) or nil)
+    end
+end)
+
 AddEventHandler('onResourceStop', function(res)
     if res ~= RES then return end
     for _, c in pairs(stashes) do if c.dirty then saveStash(c) end end
