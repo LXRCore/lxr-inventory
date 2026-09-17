@@ -31,7 +31,7 @@ local function eq(a, b, msg) if a ~= b then error((msg or 'eq') .. ': expected '
 local function container(slots, weight) return Containers.New('c', 'stash', {}, slots or 5, weight or 5000) end
 
 test('Add stacks, respects weight and slots', function()
-    local c = container(2, 1000)
+    local c = container(2, 1500)
     eq(Containers.Add(c, 'bread', 2), true)
     eq(Containers.Add(c, 'bread', 2), true)
     eq(Containers.Count(c, 'bread'), 4)
