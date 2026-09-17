@@ -1,74 +1,78 @@
-# 🐺 LXR Inventory System — The Land of Wolves
+<!--
+    🐺 lxr-inventory — LXRCore inventory UI, stashes, drops, shops
+    Developer: iBoss21 / LXRCore · https://www.lxrcore.com
+    © 2026 iBoss21 / LXRCore | lxrcore.com | All Rights Reserved
+-->
 
-```
-██╗     ██╗  ██╗██████╗        ██╗███╗   ██╗██╗   ██╗███████╗███╗   ██╗████████╗ ██████╗ ██████╗ ██╗   ██╗
-██║     ╚██╗██╔╝██╔══██╗       ██║████╗  ██║██║   ██║██╔════╝████╗  ██║╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝
-██║      ╚███╔╝ ██████╔╝█████╗ ██║██╔██╗ ██║██║   ██║█████╗  ██╔██╗ ██║   ██║   ██║   ██║██████╔╝ ╚████╔╝ 
-██║      ██╔██╗ ██╔══██╗╚════╝ ██║██║╚██╗██║╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ██║   ██║██╔══██╗  ╚██╔╝  
-███████╗██╔╝ ██╗██║  ██║       ██║██║ ╚████║ ╚████╔╝ ███████╗██║ ╚████║   ██║   ╚██████╔╝██║  ██║   ██║   
-╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝       ╚═╝╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
-```
+# 🐺 lxr-inventory — Inventory for LXRCore v3
 
-**Advanced Inventory, Crafting, Shops & Drops for RedM**
+![Version](https://img.shields.io/badge/version-2.0.0-c4a574)
+![Core](https://img.shields.io/badge/requires-lxr--core_v3-1a1512)
+![NUI](https://img.shields.io/badge/NUI-vanilla_%C2%B7_no_CDN-brightgreen)
+![Tests](https://img.shields.io/badge/move_engine_tests-7_passing-brightgreen)
 
-| | |
+Item logic (weight, slots, stacking, persistence of the player's satchel) is
+owned by **lxr-core**. This resource adds what players see and touch: the
+drag-and-drop interface, hotbar keys, stashes, ground drops, shops, giving
+items and searching other players.
+
+## Why v2
+
+| v1 (qb-inventory clone) | v2 |
 |---|---|
-| 🌐 **Website** | [wolves.land](https://www.wolves.land) |
-| 💬 **Discord** | [discord.gg/CrKcWdfd3A](https://discord.gg/CrKcWdfd3A) |
-| 🛒 **Store** | [theluxempire.tebex.io](https://theluxempire.tebex.io) |
-| 👨‍💻 **Developer** | iBoss21 / The Lux Empire |
-
----
-
-## Screenshots
-
-![Inventory](https://cdn.discordapp.com/attachments/1021700112776437760/1183252554197516329/image.png?ex=6587a8d0&is=657533d0&hm=1e716d39736b377ace0bfffcb9ab4d9cff3bbe0f874a26980730621540d06f9f&)
-
----
+| Bootstrap, jQuery, jQuery-UI, FontAwesome and Google Fonts from CDNs | vanilla HTML/CSS/JS, LXRCore design tokens, works offline |
+| "remove then add" moves — items vanished or duplicated when the add failed | one move engine (`server/containers.lua`): validate everything, then mutate; swap only when both sides fit |
+| any client could open any stash / player and push moves into it | per-player **session**: moves are only accepted into the container the server opened for you; stashes/drops are single-user while open |
+| crafting, attachments, GTA weapon images | removed (crafting belongs to its own resource) |
+| direct SQL in the resource | stash table created through the core migration runner; player items saved by the core |
 
 ## Features
 
-✨ **Dynamic Item Crafting** – Whether it's weapons, food, or supplies, you can craft them all!  
-🔫 **Weapon Attachment Crafting** – Create and customize your weapons like a pro.  
-📦 **Stashes** – Personal and shared stash systems for safe item storage.  
-🔍 **Weapon Serial Numbers** – Track and manage your weapons with unique serials.  
-🛒 **Shops** – Fully functional item shops to buy or sell your essentials.  
-💥 **Item Drops** – Drop items on the ground or pick them up seamlessly.  
-🐺 **Multi-Framework** – LXR Core (primary), RSG Core, and VORP Core supported.
+* Player satchel + secondary panel (stash · ground · shop · other player), drag & drop, split by amount, double-click to move/use.
+* Hotbar: slots 1–5 on keys 1–5 (`RegisterKeyMapping`, rebindable). Open with TAB.
+* Stashes: `Config.Stash.presets` by id prefix; other resources open them with `TriggerEvent('inventory:server:OpenInventory', 'stash', id, { label, slots, maxweight })`.
+* Ground drops: created where the player stands, prop + marker, expire when empty or after `Config.Drops.expireMs`.
+* Shops: `Config.Shops.registered` or `exports['lxr-inventory']:RegisterShop(id, { label, items })`; buying charges the account first and refunds on failure.
+* Give to nearest player (server checks distance) · search / rob when you are on-duty law or the target is cuffed / dead.
+* Item box toasts (`inventory:client:ItemBox`), use / drop animations.
+* English + Georgian locales.
 
----
+## Install
 
-## Framework Support
-
-| Framework | Status |
-|---|---|
-| LXR-Core | ✅ Primary |
-| RSG-Core | ✅ Primary |
-| VORP Core | ✅ Supported / Legacy |
-
----
-
-## Installation
-
-Ready to level up your RedM experience? Here's how to install the LXR Inventory System:
-
-1. **Download the script** and place it in the `[lxr]` directory.
-2. **Ensure the folder is named** `lxr-inventory` (resource name protection will enforce this).
-3. **Add the following** to your `server.cfg`:
-
-```bash
+```cfg
 ensure lxr-core
 ensure lxr-inventory
-ensure lxr-shops
 ```
+No SQL to import: `stashitems` is created on first start by the core migration runner.
 
-### That's it! You're now equipped with one of the most powerful inventory systems available for LXRCore! 🛠️💪
+## API
 
----
+| | |
+|---|---|
+| `exports['lxr-inventory']:OpenInventory(src, kind, id, data)` | `kind` ∈ `stash`, `drop`, `ground`, `shop`, `otherplayer` |
+| `exports['lxr-inventory']:CloseInventory(src)` | |
+| `exports['lxr-inventory']:GetStashItems(id)` / `AddStashItem(id, name, amount, info)` / `RemoveStashItem(id, name, amount)` / `ClearStash(id)` | |
+| `exports['lxr-inventory']:RegisterShop(id, def)` | |
+| `exports['lxr-inventory']:GetSlotData(src, slot)` | |
+| events kept for legacy resources | `inventory:server:OpenInventory`, `inventory:client:ItemBox`, `inventory:server:UseItemSlot`, `lxr-inventory:client:giveAnim`, `inventory:client:DropItemAnim`, `lxr-inventory:server:GetStashItems` (callback) |
+| commands | `/giveitem id item amount` (admin), `/clearinv id` (admin), `/resetstash id` (admin) |
 
-## License
+Item images: put `html/images/<item>.png` files in place (see the folder README); the UI shows a lettered tile when an image is missing.
 
+## Tests
+
+```bash
+lua tests/run.lua      # needs ../lxr-core for the runtime shim
 ```
-© 2026 iBoss21 / The Lux Empire | wolves.land | All Rights Reserved
-```
+Covers stacking, splitting, swapping, weight/slot limits, metadata separation and serialisation.
 
+## Verification
+
+| Check | Result |
+|---|---|
+| Lua / JS syntax | ✅ |
+| Move engine offline tests | ✅ 7/7 |
+| NUI rendered with mock data (grid, hotbar keys, tooltip, weight bar, shop prices) | ✅ |
+| In-game: drag & drop, stashes, drops, shops, give/search | **NOT TESTED** yet |
+
+> © 2026 iBoss21 / LXRCore | [lxrcore.com](https://www.lxrcore.com) | All Rights Reserved

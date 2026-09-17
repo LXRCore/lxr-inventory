@@ -1,1020 +1,489 @@
 --[[
     ██╗     ██╗  ██╗██████╗        ██╗███╗   ██╗██╗   ██╗███████╗███╗   ██╗████████╗ ██████╗ ██████╗ ██╗   ██╗
     ██║     ╚██╗██╔╝██╔══██╗       ██║████╗  ██║██║   ██║██╔════╝████╗  ██║╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝
-    ██║      ╚███╔╝ ██████╔╝█████╗ ██║██╔██╗ ██║██║   ██║█████╗  ██╔██╗ ██║   ██║   ██║   ██║██████╔╝ ╚████╔╝ 
-    ██║      ██╔██╗ ██╔══██╗╚════╝ ██║██║╚██╗██║╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ██║   ██║██╔══██╗  ╚██╔╝  
-    ███████╗██╔╝ ██╗██║  ██║       ██║██║ ╚████║ ╚████╔╝ ███████╗██║ ╚████║   ██║   ╚██████╔╝██║  ██║   ██║   
-    ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝       ╚═╝╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
+    ██║      ╚███╔╝ ██████╔╝█████╗ ██║██╔██╗ ██║██║   ██║█████╗  ██╔██╗ ██║   ██║   ██║   ██║██████╔╝ ╚████╔╝
+    ██║      ██╔██╗ ██╔══██╗╚════╝ ██║██║╚██╗██║╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ██║   ██║██╔══██╗  ╚██╔╝
+    ███████╗██╔╝ ██╗██║  ██║       ██║██║ ╚████║ ╚████╔╝ ███████╗██║ ╚████║   ██║   ╚██████╔╝██║  ██║   ██║
+    ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝       ╚═╝╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝
 
-    🐺 LXR Inventory System — Server
-    Advanced Inventory, Crafting, Shops & Drops for RedM
+    🐺 LXR Core - Inventory Server
 
-    ═══════════════════════════════════════════════════════════════════════════════
-    SERVER INFORMATION
-    ═══════════════════════════════════════════════════════════════════════════════
+    Sessions (who has which container open), stashes (persisted), ground
+    drops (in memory, expiring), shops (buy = money then item, atomic),
+    giving, searching, using. Every net event is rate limited and re-checks
+    the session so a modified client cannot reach a container it did not open.
 
-    Server:    The Land of Wolves 🐺
-    Developer: iBoss21 / The Lux Empire
-    Website:   https://www.wolves.land
-    Discord:   https://discord.gg/CrKcWdfd3A
-    Store:     https://theluxempire.tebex.io
-
-    ═══════════════════════════════════════════════════════════════════════════════
-
-    © 2026 iBoss21 / The Lux Empire | wolves.land | All Rights Reserved
+    Developer:   iBoss21 / LXRCore
+    Website:     https://www.lxrcore.com
+    © 2026 iBoss21 / LXRCore | lxrcore.com | All Rights Reserved
 ]]
 
-local Drops, Stashes, ShopItems, Active = {}, {}, {}, {}
-local sharedItems = exports['lxr-core']:GetItems()
--- Functions
+local LXRCore = exports['lxr-core']:GetCoreObject()
+local RES = GetCurrentResourceName()
 
-local function recipeContains(recipe, fromItem)
-	for _, v in pairs(recipe.accept) do
-		if v == fromItem.name then
-			return true
-		end
-	end
-	return false
+local sessions = {}   -- source → { other = container|nil, otherId = string|nil }
+local stashes = {}    -- id → container (loaded lazily)
+local drops = {}      -- id → container + coords + createdAt
+local shops = {}      -- id → container (items carry price)
+local buckets = {}
+local nextDrop = 0
+
+local function limited(src)
+    local rl = Config.Security.rateLimit
+    return not LXRCore.RateLimit(buckets, src, rl.burst, rl.windowMs)
 end
 
-local function hasCraftItems(source, CostItems, amount)
-	local Player = exports['lxr-core']:GetPlayer(source)
-	for k, v in pairs(CostItems) do
-		if Player.Functions.GetItemByName(k) ~= nil then
-			if Player.Functions.GetItemByName(k).amount < (v * amount) then
-				return false
-			end
-		else
-			return false
-		end
-	end
-	return true
+local function notify(src, key, kind, vars)
+    TriggerClientEvent('LXRCore:Notify', src, Lang:t(key, vars), kind or 'error')
 end
 
-local function IsOwnedHorse(id)
-    local result = exports.oxmysql:scalarSync('SELECT id from horses WHERE id = ?', {id})
-    if result then return true else return false end
+local function playerContainer(Player)
+    local pd = Player.PlayerData
+    return Containers.New('player', 'player', pd.items, tonumber(pd.slots) or LXRCore.Config.Player.maxSlots,
+        tonumber(pd.weight) or LXRCore.Config.Player.maxWeight, Lang:t('ui.your_satchel'), { player = Player })
 end
 
--- Shop Items
-local function SetupShopItems(shop, shopItems)
-	local items = {}
-	if shopItems and next(shopItems) then
-		for k, item in pairs(shopItems) do
-			local itemInfo = sharedItems[item.name:lower()]
-			if itemInfo then
-				items[k] = {
-					name = itemInfo["name"],
-					amount = tonumber(item.amount),
-					info = item.info or "",
-					label = itemInfo["label"],
-					description = itemInfo["description"] or "",
-					weight = itemInfo["weight"],
-					type = itemInfo["type"],
-					unique = itemInfo["unique"],
-					useable = itemInfo["useable"],
-					price = item.price,
-					image = itemInfo["image"],
-					slot = k,
-				}
-			end
-		end
-	end
-	return items
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 📦 STASHES (persisted in Config.Stash.table)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local function stashLimits(id, data)
+    local slots, weight = Config.Stash.defaultSlots, Config.Stash.defaultWeight
+    for prefix, preset in pairs(Config.Stash.presets or {}) do
+        if id:sub(1, #prefix) == prefix then slots, weight = preset.slots, preset.weight end
+    end
+    if type(data) == 'table' then
+        slots = tonumber(data.slots) or slots
+        weight = tonumber(data.maxweight or data.weight) or weight
+    end
+    return slots, weight
 end
 
--- Stash Items
-local function GetStashItems(stashId)
-	local items = {}
-	local result = exports.oxmysql:scalarSync('SELECT items FROM stashitems WHERE stash = ?', {stashId})
-	if result then
-		local stashItems = json.decode(result)
-		if stashItems then
-			for k, item in pairs(stashItems) do
-				local itemInfo = sharedItems[item.name:lower()]
-				if itemInfo then
-					items[item.slot] = {
-						name = itemInfo["name"],
-						amount = tonumber(item.amount),
-						info = item.info or "",
-						label = itemInfo["label"],
-						description = itemInfo["description"] or "",
-						weight = itemInfo["weight"],
-						type = itemInfo["type"],
-						unique = itemInfo["unique"],
-						useable = itemInfo["useable"],
-						image = itemInfo["image"],
-						slot = item.slot,
-					}
-				end
-			end
-		end
-	end
-	return items
+local function getStash(id, data)
+    if stashes[id] then
+        if type(data) == 'table' then
+            local s, w = stashLimits(id, data)
+            stashes[id].slots, stashes[id].maxWeight = s, w
+            if data.label then stashes[id].label = data.label end
+        end
+        return stashes[id]
+    end
+    local raw = LXRCore.DB.Scalar(('SELECT items FROM `%s` WHERE stash = ?'):format(Config.Stash.table), { id })
+    local items = Containers.Deserialize(LXRCore.Shared.JsonDecode(raw, {}))
+    local slots, weight = stashLimits(id, data)
+    stashes[id] = Containers.New(id, 'stash', items, slots, weight, (type(data) == 'table' and data.label) or id, { dirty = false })
+    return stashes[id]
 end
 
-local function SaveStashItems(stashId, items)
-	if Stashes[stashId].label ~= Lang:t("info.stash_none") then
-		if items then
-			for slot, item in pairs(items) do
-				item.description = nil
-			end
-			exports.oxmysql:insert('INSERT INTO stashitems (stash, items) VALUES (:stash, :items) ON DUPLICATE KEY UPDATE items = :items', {
-				['stash'] = stashId,
-				['items'] = json.encode(items)
-			})
-			Active[Stashes[stashId].isOpen] = nil
-			Stashes[stashId].isOpen = false
-		end
-	end
+local function saveStash(c)
+    if not c or c.kind ~= 'stash' then return end
+    LXRCore.DB.InsertAsync(('INSERT INTO `%s` (stash, items) VALUES (?, ?) ON DUPLICATE KEY UPDATE items = VALUES(items)'):format(Config.Stash.table),
+        { c.id, json.encode(Containers.Serialize(c)) })
+    c.dirty = false
 end
 
-local function AddToStash(stashId, slot, otherslot, itemName, amount, info)
-	local amount = tonumber(amount)
-	local ItemData = sharedItems[itemName]
-	if not ItemData.unique then
-		if Stashes[stashId].items[slot] and Stashes[stashId].items[slot].name == itemName then
-			Stashes[stashId].items[slot].amount = Stashes[stashId].items[slot].amount + amount
-		else
-			local itemInfo = sharedItems[itemName:lower()]
-			Stashes[stashId].items[slot] = {
-				name = itemInfo["name"],
-				amount = amount,
-				info = info or "",
-				label = itemInfo["label"],
-				description = itemInfo["description"] or "",
-				weight = itemInfo["weight"],
-				type = itemInfo["type"],
-				unique = itemInfo["unique"],
-				useable = itemInfo["useable"],
-				image = itemInfo["image"],
-				slot = slot,
-			}
-		end
-	else
-		if Stashes[stashId].items[slot] and Stashes[stashId].items[slot].name == itemName then
-			local itemInfo = sharedItems[itemName:lower()]
-			Stashes[stashId].items[otherslot] = {
-				name = itemInfo["name"],
-				amount = amount,
-				info = info or "",
-				label = itemInfo["label"],
-				description = itemInfo["description"] or "",
-				weight = itemInfo["weight"],
-				type = itemInfo["type"],
-				unique = itemInfo["unique"],
-				useable = itemInfo["useable"],
-				image = itemInfo["image"],
-				slot = otherslot,
-			}
-		else
-			local itemInfo = sharedItems[itemName:lower()]
-			Stashes[stashId].items[slot] = {
-				name = itemInfo["name"],
-				amount = amount,
-				info = info or "",
-				label = itemInfo["label"],
-				description = itemInfo["description"] or "",
-				weight = itemInfo["weight"],
-				type = itemInfo["type"],
-				unique = itemInfo["unique"],
-				useable = itemInfo["useable"],
-				image = itemInfo["image"],
-				slot = slot,
-			}
-		end
-	end
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🪵 DROPS (in memory)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local function broadcastDrops()
+    local list = {}
+    for id, d in pairs(drops) do list[#list + 1] = { id = id, coords = d.coords } end
+    TriggerClientEvent('lxr-inventory:client:drops', -1, list)
 end
 
-local function RemoveFromStash(stashId, slot, itemName, amount)
-	local amount = tonumber(amount)
-	if Stashes[stashId].items[slot] ~= nil and Stashes[stashId].items[slot].name == itemName then
-		if Stashes[stashId].items[slot].amount > amount then
-			Stashes[stashId].items[slot].amount = Stashes[stashId].items[slot].amount - amount
-		else
-			Stashes[stashId].items[slot] = nil
-			if next(Stashes[stashId].items) == nil then
-				Stashes[stashId].items = {}
-			end
-		end
-	else
-		Stashes[stashId].items[slot] = nil
-		if Stashes[stashId].items == nil then
-			Stashes[stashId].items[slot] = nil
-		end
-	end
+local function createDrop(coords)
+    nextDrop = nextDrop + 1
+    local id = ('drop-%d'):format(nextDrop)
+    drops[id] = Containers.New(id, 'drop', {}, Config.Drops.slots, Config.Drops.weight, Lang:t('ui.ground'),
+        { coords = coords, createdAt = GetGameTimer() })
+    return drops[id]
 end
 
--- Drop items
-local function AddToDrop(dropId, slot, itemName, amount, info)
-	local amount = tonumber(amount)
-	if Drops[dropId].items[slot] ~= nil and Drops[dropId].items[slot].name == itemName then
-		Drops[dropId].items[slot].amount = Drops[dropId].items[slot].amount + amount
-	else
-		local itemInfo = sharedItems[itemName:lower()]
-		Drops[dropId].items[slot] = {
-			name = itemInfo["name"],
-			amount = amount,
-			info = info or "",
-			label = itemInfo["label"],
-			description = itemInfo["description"] or "",
-			weight = itemInfo["weight"],
-			type = itemInfo["type"],
-			unique = itemInfo["unique"],
-			useable = itemInfo["useable"],
-			image = itemInfo["image"],
-			slot = slot,
-			id = dropId,
-		}
-	end
+local function removeDrop(id)
+    drops[id] = nil
+    for src, s in pairs(sessions) do
+        if s.otherId == id then
+            s.other, s.otherId = nil, nil
+            TriggerClientEvent('lxr-inventory:client:otherClosed', src)
+        end
+    end
+    broadcastDrops()
 end
 
-local function RemoveFromDrop(dropId, slot, itemName, amount)
-	if Drops[dropId].items[slot] ~= nil and Drops[dropId].items[slot].name == itemName then
-		if Drops[dropId].items[slot].amount > amount then
-			Drops[dropId].items[slot].amount = Drops[dropId].items[slot].amount - amount
-		else
-			Drops[dropId].items[slot] = nil
-			if next(Drops[dropId].items) == nil then
-				Drops[dropId].items = {}
-			end
-		end
-	else
-		Drops[dropId].items[slot] = nil
-		if Drops[dropId].items == nil then
-			Drops[dropId].items[slot] = nil
-		end
-	end
+local function nearestDrop(coords, range)
+    local best, bestDist
+    for id, d in pairs(drops) do
+        local dist = #(vector3(d.coords.x, d.coords.y, d.coords.z) - coords)
+        if dist <= range and (not bestDist or dist < bestDist) then best, bestDist = d, dist end
+    end
+    return best
 end
 
-local function CreateDropId()
-	if Drops ~= nil then
-		local id = math.random(10000, 99999)
-		local dropid = id
-		while Drops[dropid] ~= nil do
-			id = math.random(10000, 99999)
-			dropid = id
-		end
-		return dropid
-	else
-		local id = math.random(10000, 99999)
-		local dropid = id
-		return dropid
-	end
+CreateThread(function()
+    while true do
+        Wait(60000)
+        local now = GetGameTimer()
+        for id, d in pairs(drops) do
+            if Containers.IsEmpty(d) or now - d.createdAt > Config.Drops.expireMs then removeDrop(id) end
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🛒 SHOPS
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local function buildShop(id, data)
+    local def = data or Config.Shops.registered[id]
+    if not def or type(def.items) ~= 'table' then return nil end
+    local items = {}
+    local slot = 0
+    for _, entry in ipairs(def.items) do
+        local itemDef = LXRShared.Items[tostring(entry.name):lower()]
+        if itemDef then
+            slot = slot + 1
+            items[slot] = {
+                name = itemDef.name, amount = tonumber(entry.amount) or 100, info = entry.info or {}, label = itemDef.label,
+                description = itemDef.description or '', weight = itemDef.weight, type = itemDef.type, unique = itemDef.unique,
+                useable = itemDef.useable, image = itemDef.image, slot = slot, price = tonumber(entry.price) or 0,
+            }
+        end
+    end
+    local c = Containers.New(id, 'shop', items, math.max(slot, 1), math.huge, def.label or id, { account = def.account or Config.Shops.account })
+    shops[id] = c
+    return c
 end
 
-local function CreateNewDrop(source, fromSlot, toSlot, itemAmount)
-	local Player = exports['lxr-core']:GetPlayer(source)
-	local itemData = Player.Functions.GetItemBySlot(fromSlot)
-	local coords = GetEntityCoords(GetPlayerPed(source))
-	if Player.Functions.RemoveItem(itemData.name, itemAmount, itemData.slot) then
-		if string.find(itemData.name, 'weapon') then
-			TriggerClientEvent("lxr-weapons:client:CheckWeapon", source, itemData.name)
-		end
-		local itemInfo = sharedItems[itemData.name:lower()]
-		local dropId = CreateDropId()
-		Drops[dropId] = {}
-		Drops[dropId].items = {}
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🔓 OPENING
+-- ═══════════════════════════════════════════════════════════════════════════════
 
-		Drops[dropId].items[toSlot] = {
-			name = itemInfo["name"],
-			amount = itemAmount,
-			info = itemData.info or "",
-			label = itemInfo["label"],
-			description = itemInfo["description"] or "",
-			weight = itemInfo["weight"],
-			type = itemInfo["type"],
-			unique = itemInfo["unique"],
-			useable = itemInfo["useable"],
-			image = itemInfo["image"],
-			slot = toSlot,
-			id = dropId,
-		}
-		TriggerEvent("lxr-log:server:CreateLog", "drop", "New Item Drop", "red", "**".. GetPlayerName(source) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..source.."*) dropped new item; name: **"..itemData.name.."**, amount: **" .. itemAmount .. "**")
-		TriggerClientEvent("inventory:client:DropItemAnim", source)
-		TriggerClientEvent("inventory:client:AddDropItem", -1, dropId, source, coords)
-	else
-		TriggerClientEvent("LXRCore:Notify", source, Lang:t("error.not_owned"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		return
-	end
+local function canSearch(Player, Target)
+    local r = Config.General.searchRequires
+    local job = Player.PlayerData.job
+    if r.leoOnDuty and job.type == 'leo' and job.onduty then return true end
+    local md = Target.PlayerData.metadata or {}
+    if r.targetCuffed and md.ishandcuffed then return true end
+    if r.targetDead and md.isdead then return true end
+    return false
 end
+
+local function within(src, target, range)
+    local a, b = GetPlayerPed(src), GetPlayerPed(target)
+    if a == 0 or b == 0 then return false end
+    return #(GetEntityCoords(a) - GetEntityCoords(b)) <= range
+end
+
+---Resolve (kind, id, data) to a container the requesting player may use.
+local function resolveOther(src, Player, kind, id, data)
+    if kind == 'stash' then
+        if type(id) ~= 'string' or id == '' or #id > 100 then return nil, 'invalid' end
+        return getStash(id, data)
+    elseif kind == 'drop' then
+        local d = drops[id]
+        if not d then return nil, 'invalid' end
+        local ped = GetPlayerPed(src)
+        if #(GetEntityCoords(ped) - vector3(d.coords.x, d.coords.y, d.coords.z)) > Config.Drops.pickupRange + 1.0 then return nil, 'too_far' end
+        return d
+    elseif kind == 'ground' then
+        local ped = GetPlayerPed(src)
+        local coords = GetEntityCoords(ped)
+        local d = nearestDrop(coords, Config.Drops.pickupRange)
+        if not d then
+            d = createDrop({ x = coords.x, y = coords.y, z = coords.z })
+            broadcastDrops()
+        end
+        return d
+    elseif kind == 'shop' then
+        if type(id) ~= 'string' then return nil, 'invalid' end
+        local c = shops[id] or buildShop(id, data)
+        if not c then return nil, 'invalid' end
+        return c
+    elseif kind == 'otherplayer' then
+        local target = LXRCore.Functions.GetPlayer(tonumber(id))
+        if not target or target.PlayerData.source == src then return nil, 'invalid' end
+        if not within(src, target.PlayerData.source, Config.General.searchDistance) then return nil, 'too_far' end
+        if not canSearch(Player, target) then return nil, 'no_permission' end
+        local c = playerContainer(target)
+        c.id, c.kind, c.label = tostring(target.PlayerData.source), 'otherplayer', Lang:t('ui.other_player')
+        return c
+    end
+    return nil, 'invalid'
+end
+
+local function open(src, kind, id, data)
+    local Player = LXRCore.Functions.GetPlayer(src)
+    if not Player then return end
+    local other, err
+    if kind then
+        other, err = resolveOther(src, Player, kind, id, data)
+        if not other then return notify(src, 'error.' .. (err or 'invalid')) end
+        -- a stash / drop may only be open by one player at a time (prevents dupes by racing moves)
+        if (other.kind == 'stash' or other.kind == 'drop') and other.openBy and other.openBy ~= src and LXRCore.Players[other.openBy] then
+            return notify(src, 'error.in_use')
+        end
+        other.openBy = src
+    end
+    sessions[src] = { other = other, otherId = other and other.id or nil, kind = other and other.kind or nil }
+    TriggerClientEvent('lxr-inventory:client:open', src, Containers.View(playerContainer(Player)), other and Containers.View(other) or nil)
+end
+
+local function close(src)
+    local s = sessions[src]
+    if not s then return end
+    if s.other then
+        if s.other.openBy == src then s.other.openBy = nil end
+        if s.other.kind == 'stash' and s.other.dirty then saveStash(s.other) end
+        if s.other.kind == 'drop' and Containers.IsEmpty(s.other) then removeDrop(s.other.id) end
+    end
+    sessions[src] = nil
+    if Config.General.saveOnClose then
+        local Player = LXRCore.Functions.GetPlayer(src)
+        if Player then LXRCore.Player.Save(src, false) end
+    end
+end
+
+local function refresh(src)
+    local Player = LXRCore.Functions.GetPlayer(src)
+    local s = sessions[src]
+    if not Player then return end
+    Player.Functions.UpdatePlayerData()
+    TriggerClientEvent('lxr-inventory:client:update', src, Containers.View(playerContainer(Player)), s and s.other and Containers.View(s.other) or nil)
+    if s and s.other and s.other.kind == 'otherplayer' then
+        local target = s.other.player
+        if target then target.Functions.UpdatePlayerData() end
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 📡 EVENTS
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+RegisterNetEvent('lxr-inventory:server:open', function(kind, id, data)
+    local src = source
+    if limited(src) then return end
+    if kind ~= nil and type(kind) ~= 'string' then return end
+    -- data from clients is only honoured for shops registered in config; others resources pass data server-side
+    open(src, kind, id, nil)
+end)
+
+-- Server-side API for other resources: TriggerEvent('inventory:server:OpenInventory', 'stash', id, { label, slots, maxweight })
+AddEventHandler('inventory:server:OpenInventory', function(kind, id, data)
+    local src = source
+    if not LXRCore.Players[src] then return end
+    if kind == 'player' or kind == nil then return open(src, nil) end
+    open(src, kind, id, data)
+end)
+-- net variant kept for legacy resources; client-supplied data is ignored
+RegisterNetEvent('inventory:server:OpenInventory', function(kind, id)
+    local src = source
+    if limited(src) then return end
+    if kind == 'player' or kind == nil then return open(src, nil) end
+    open(src, kind, id, nil)
+end)
+
+RegisterNetEvent('lxr-inventory:server:close', function()
+    close(source)
+end)
+
+RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlot, toSlot, amount)
+    local src = source
+    if limited(src) then return end
+    local Player = LXRCore.Functions.GetPlayer(src)
+    local s = sessions[src]
+    if not Player or not s then return end
+    local mine = playerContainer(Player)
+    local function pick(kind)
+        if kind == 'player' then return mine end
+        if kind == 'other' then return s.other end
+        return nil
+    end
+    local from, to = pick(fromKind), pick(toKind)
+    if not from or not to then return end
+    amount = tonumber(amount)
+    if amount and amount > Config.Security.maxMoveAmount then return end
+
+    -- shops: buying only, player → shop is not allowed
+    if to.kind == 'shop' then return notify(src, 'error.cannot_store_here') end
+    if from.kind == 'shop' then
+        local entry = from.items[tonumber(fromSlot)]
+        if not entry then return end
+        amount = math.floor(amount or 1)
+        if amount <= 0 or amount > entry.amount then return notify(src, 'error.invalid_amount') end
+        local price = (entry.price or 0) * amount
+        local canSlot = Containers.CanPlace(mine, entry.name, amount, entry.info, toSlot)
+        if price > 0 and not Player.Functions.RemoveMoney(from.account, price, 'shop:' .. from.id) then
+            return notify(src, 'error.not_enough_money')
+        end
+        local ok, why
+        if canSlot then
+            ok = Containers.PlaceAt(mine, entry.name, amount, entry.info, toSlot)
+        else
+            ok, why = Containers.Add(mine, entry.name, amount, entry.info) -- any free slot
+        end
+        if not ok then
+            if price > 0 then Player.Functions.AddMoney(from.account, price, 'shop:refund') end
+            return notify(src, 'error.' .. (why or 'too_heavy'))
+        end
+        LXRCore.Log.info('inventory', ('bought %dx %s for %s'):format(amount, entry.name, price), { source = src, shop = from.id })
+        TriggerClientEvent('inventory:client:ItemBox', src, LXRShared.Items[entry.name], 'add', amount)
+        return refresh(src)
+    end
+
+    local ok, why, action = Containers.Move(from, to, fromSlot, toSlot, amount)
+    if not ok then return notify(src, 'error.' .. (why or 'invalid')) end
+    if from.kind == 'stash' then from.dirty = true end
+    if to.kind == 'stash' then to.dirty = true end
+    if from ~= to then
+        local moved = to.items[tonumber(toSlot)] or from.items[tonumber(fromSlot)]
+        LXRCore.Log.info('inventory', ('%s %s -> %s'):format(action or 'move', from.kind, to.kind),
+            { source = src, item = moved and moved.name, amount = amount, fromId = from.id, toId = to.id })
+        if to.kind == 'otherplayer' and to.player then
+            TriggerClientEvent('inventory:client:ItemBox', to.player.PlayerData.source, LXRShared.Items[moved.name], 'add', amount)
+        end
+    end
+    refresh(src)
+end)
+
+RegisterNetEvent('lxr-inventory:server:use', function(slot)
+    local src = source
+    if limited(src) then return end
+    local Player = LXRCore.Functions.GetPlayer(src)
+    slot = tonumber(slot)
+    if not Player or not slot then return end
+    local item = Player.PlayerData.items[slot]
+    if not item then return end
+    if not LXRCore.Items.CanUse(item.name) then return notify(src, 'error.not_usable') end
+    if Config.General.closeOnUse and item.shouldClose then close(src) TriggerClientEvent('lxr-inventory:client:close', src) end
+    TriggerClientEvent('lxr-inventory:client:useAnim', src)
+    LXRCore.Items.Use(src, item)
+    refresh(src)
+end)
+
+RegisterNetEvent('lxr-inventory:server:give', function(target, slot, amount)
+    local src = source
+    if limited(src) then return end
+    local Player = LXRCore.Functions.GetPlayer(src)
+    local Target = LXRCore.Functions.GetPlayer(tonumber(target))
+    slot = tonumber(slot)
+    if not Player or not Target or Target == Player or not slot then return end
+    if not within(src, Target.PlayerData.source, Config.General.giveDistance) then return notify(src, 'error.too_far') end
+    local item = Player.PlayerData.items[slot]
+    if not item then return end
+    amount = math.floor(tonumber(amount) or item.amount)
+    if amount <= 0 or amount > item.amount then return notify(src, 'error.invalid_amount') end
+    local mine, theirs = playerContainer(Player), playerContainer(Target)
+    local ok, why = Containers.Add(theirs, item.name, amount, item.info)
+    if not ok then return notify(src, why == 'too_heavy' and 'error.target_full' or ('error.' .. why)) end
+    item.amount = item.amount - amount
+    if item.amount <= 0 then mine.items[slot] = nil end
+    Target.Functions.UpdatePlayerData()
+    TriggerClientEvent('inventory:client:ItemBox', Target.PlayerData.source, LXRShared.Items[item.name], 'add', amount)
+    TriggerClientEvent('inventory:client:ItemBox', src, LXRShared.Items[item.name], 'remove', amount)
+    TriggerClientEvent('lxr-inventory:client:giveAnim', src)
+    LXRCore.Log.info('inventory', ('gave %dx %s'):format(amount, item.name), { source = src, target = Target.PlayerData.source })
+    refresh(src)
+end)
 
 AddEventHandler('playerDropped', function()
-    local src = source
-    local id = Active[src]
-    if not id or not Stashes[id] then return end
-    SaveStashItems(id, Stashes[id].items)
-    Active[src] = nil
+    close(source)
+    buckets[source] = nil
 end)
 
--- Events
+AddEventHandler('LXRCore:Server:OnPlayerUnload', function(src) close(src) end)
 
-RegisterNetEvent('inventory:server:combineItem', function(item, fromItem, toItem)
-	local src = source
-	local ply = exports['lxr-core']:GetPlayer(src)
-
-	-- Check that inputs are not nil
-	-- Most commonly when abusing this exploit, this values are left as
-	if fromItem == nil  then return end
-	if toItem == nil then return end
-
-	-- Check that they have the items
-	local fromItem = ply.Functions.GetItemByName(fromItem)
-	local toItem = ply.Functions.GetItemByName(toItem)
-
-	if fromItem == nil  then return end
-	if toItem == nil then return end
-
-	-- Check the recipe is valid
-	local recipe = sharedItems[toItem.name].combinable
-
-	if recipe and recipe.reward ~= item then return end
-	if not recipeContains(recipe, fromItem) then return end
-
-	TriggerClientEvent('inventory:client:ItemBox', src, sharedItems[item], 'add')
-	ply.Functions.AddItem(item, 1)
-	ply.Functions.RemoveItem(fromItem.name, 1)
-	ply.Functions.RemoveItem(toItem.name, 1)
+AddEventHandler('onResourceStop', function(res)
+    if res ~= RES then return end
+    for _, c in pairs(stashes) do if c.dirty then saveStash(c) end end
 end)
 
-RegisterNetEvent('inventory:server:CraftItems', function(itemName, itemCosts, amount, toSlot, points)
-	local src = source
-	local Player = exports['lxr-core']:GetPlayer(src)
-	local amount = tonumber(amount)
-	if not itemName or not itemCosts then return end
-	for k, v in pairs(itemCosts) do
-		if not Player.Functions.RemoveItem(k, (v*amount)) then return end
-	end
-	Player.Functions.AddItem(itemName, amount, toSlot)
-	Player.Functions.SetMetaData("craftingrep", Player.PlayerData.metadata["craftingrep"]+(points*amount))
-	TriggerClientEvent("inventory:client:UpdatePlayerInventory", src, false)
+-- Send current drops to late joiners
+AddEventHandler('LXRCore:Server:PlayerLoaded', function(Player)
+    local list = {}
+    for id, d in pairs(drops) do list[#list + 1] = { id = id, coords = d.coords } end
+    TriggerClientEvent('lxr-inventory:client:drops', Player.PlayerData.source, list)
 end)
 
-RegisterNetEvent('inventory:server:CraftAttachment', function(itemName, itemCosts, amount, toSlot, points)
-	local src = source
-	local Player = exports['lxr-core']:GetPlayer(src)
-	local amount = tonumber(amount)
-	if not itemName or not itemCosts then return end
-	for k, v in pairs(itemCosts) do
-		if not Player.Functions.RemoveItem(k, (v*amount)) then return end
-	end
-	Player.Functions.AddItem(itemName, amount, toSlot)
-	TriggerClientEvent("inventory:client:UpdatePlayerInventory", src, false)
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🔌 EXPORTS & COMMANDS
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+exports('OpenInventory', function(src, kind, id, data) open(src, kind, id, data) end)
+exports('CloseInventory', function(src) close(src) TriggerClientEvent('lxr-inventory:client:close', src) end)
+exports('GetStashItems', function(id) return Containers.Serialize(getStash(id)) end)
+exports('AddStashItem', function(id, name, amount, info)
+    local c = getStash(id)
+    local ok, why = Containers.Add(c, name, amount, info)
+    if ok then c.dirty = true saveStash(c) end
+    return ok, why
+end)
+exports('RemoveStashItem', function(id, name, amount)
+    local c = getStash(id)
+    if Containers.Count(c, name) < (tonumber(amount) or 1) then return false, 'not_owned' end
+    local remaining = math.floor(tonumber(amount) or 1)
+    for slot, it in pairs(c.items) do
+        if it.name == name and remaining > 0 then
+            local take = math.min(it.amount, remaining)
+            it.amount = it.amount - take
+            remaining = remaining - take
+            if it.amount <= 0 then c.items[slot] = nil end
+        end
+    end
+    c.dirty = true
+    saveStash(c)
+    return true
+end)
+exports('ClearStash', function(id)
+    local c = getStash(id)
+    c.items = {}
+    c.dirty = true
+    saveStash(c)
+    return true
+end)
+exports('RegisterShop', function(id, data) return buildShop(id, data) ~= nil end)
+exports('GetSlotData', function(src, slot)
+    local Player = LXRCore.Functions.GetPlayer(src)
+    return Player and Player.PlayerData.items[tonumber(slot)] or nil
 end)
 
-RegisterNetEvent('inventory:server:SetIsOpenState', function(IsOpen, type, id)
-	if not IsOpen then
-		if type == "stash" then
-			Stashes[id].isOpen = false
-		elseif type == "drop" then
-			Drops[id].isOpen = false
-		end
-	end
-end)
+-- Legacy aliases (QBR-era event names)
+RegisterNetEvent('inventory:server:UseItemSlot', function(slot) TriggerEvent('lxr-inventory:server:use', slot) end)
+RegisterNetEvent('inventory:server:SaveInventory', function() end)
+LXRCore.Functions.CreateCallback('lxr-inventory:server:GetStashItems', function(_, cb, id) cb(Containers.Serialize(getStash(id))) end)
 
-RegisterNetEvent('inventory:server:OpenInventory', function(name, id, other)
-	local src = source
-	local ply = Player(src)
-	local Player = exports['lxr-core']:GetPlayer(src)
-	if not ply.state.inv_busy then
-		if name and id then
-			local secondInv = {}
-			if name == "stash" then
-				if Stashes[id] then
-					if Stashes[id].isOpen then
-						local Target = exports['lxr-core']:GetPlayer(Stashes[id].isOpen)
-						if Target then
-							TriggerClientEvent('inventory:client:CheckOpenState', Stashes[id].isOpen, name, id, Stashes[id].label)
-						else
-							Stashes[id].isOpen = false
-						end
-					end
-				end
-				local maxweight = 1000000
-				local slots = 50
-				if other then
-					maxweight = other.maxweight or 1000000
-					slots = other.slots or 50
-				end
-				secondInv.name = "stash-"..id
-				secondInv.label = Lang:t("info.stash")..id
-				secondInv.maxweight = maxweight
-				secondInv.inventory = {}
-				secondInv.slots = slots
-				if Stashes[id] and Stashes[id].isOpen then
-					secondInv.name = "none-inv"
-					secondInv.label = "Stash-None"
-					secondInv.maxweight = 1000000
-					secondInv.inventory = {}
-					secondInv.slots = 0
-				else
-					local stashItems = GetStashItems(id)
-					if next(stashItems) then
-						secondInv.inventory = stashItems
-						Stashes[id] = {}
-						Active[src] = id
-						Stashes[id].items = stashItems
-						Stashes[id].isOpen = src
-						Stashes[id].label = secondInv.label
-					else
-						Stashes[id] = {}
-						Active[src] = id
-						Stashes[id].items = {}
-						Stashes[id].isOpen = src
-						Stashes[id].label = secondInv.label
-					end
-				end
-			elseif name == "shop" then
-				secondInv.name = "itemshop-"..id
-				secondInv.label = other.label
-				secondInv.maxweight = 900000
-				secondInv.inventory = SetupShopItems(id, other.items)
-				ShopItems[id] = {}
-				ShopItems[id].items = other.items
-				secondInv.slots = #other.items
-			elseif name == "crafting" then
-				secondInv.name = "crafting"
-				secondInv.label = other.label
-				secondInv.maxweight = 900000
-				secondInv.inventory = other.items
-				secondInv.slots = #other.items
-			elseif name == "attachment_crafting" then
-				secondInv.name = "attachment_crafting"
-				secondInv.label = other.label
-				secondInv.maxweight = 900000
-				secondInv.inventory = other.items
-				secondInv.slots = #other.items
-			elseif name == "otherplayer" then
-				local OtherPlayer = exports['lxr-core']:GetPlayer(tonumber(id))
-				if OtherPlayer then
-					secondInv.name = "otherplayer-"..id
-					secondInv.label = "Player-"..id
-					secondInv.maxweight = exports['lxr-core']:GetConfig().Player.MaxWeight
-					secondInv.inventory = OtherPlayer.PlayerData.items
-					if Player.PlayerData.job.name == "police" and Player.PlayerData.job.onduty then
-						secondInv.slots = exports['lxr-core']:GetConfig().Player.MaxInvSlots
-					else
-						secondInv.slots = exports['lxr-core']:GetConfig().Player.MaxInvSlots - 1
-					end
-					Wait(250)
-				end
-			else
-				if Drops[id] then
-					if Drops[id].isOpen then
-						local Target = exports['lxr-core']:GetPlayer(Drops[id].isOpen)
-						if Target then
-							TriggerClientEvent('inventory:client:CheckOpenState', Drops[id].isOpen, name, id, Drops[id].label)
-						else
-							Drops[id].isOpen = false
-						end
-					end
-				end
-				if Drops[id] and not Drops[id].isOpen then
-					secondInv.name = id
-					secondInv.label = Lang:t("info.dropped")..tostring(id)
-					secondInv.maxweight = 100000
-					secondInv.inventory = Drops[id].items
-					secondInv.slots = 30
-					Drops[id].isOpen = src
-					Drops[id].label = secondInv.label
-				else
-					secondInv.name = "none-inv"
-					secondInv.label = Lang:t("info.dropped_none")
-					secondInv.maxweight = 100000
-					secondInv.inventory = {}
-					secondInv.slots = 0
-				end
-			end
-			TriggerClientEvent("inventory:client:OpenInventory", src, {}, Player.PlayerData.items, secondInv)
-		else
-			TriggerClientEvent("inventory:client:OpenInventory", src, {}, Player.PlayerData.items)
-		end
-	else
-		TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.no_access"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-	end
-end)
+LXRCore.Commands.Add('giveitem', Lang:t('command.giveitem'), { { name = 'id', help = 'Player id' }, { name = 'item', help = 'Item name' }, { name = 'amount', help = 'Amount' } }, true, function(src, args)
+    local Target = LXRCore.Functions.GetPlayer(tonumber(args[1]))
+    if not Target then return notify(src, 'error.invalid') end
+    local ok, why = Target.Functions.AddItem(tostring(args[2]):lower(), tonumber(args[3]) or 1, nil, nil, 'admin:giveitem')
+    if src > 0 then notify(src, ok and 'info.item_given' or ('error.' .. (why or 'invalid')), ok and 'success' or 'error') end
+end, 'admin')
 
-RegisterNetEvent('inventory:server:SaveInventory', function(type, id)
-	if type == "stash" then
-		SaveStashItems(id, Stashes[id].items)
-	elseif type == "drop" then
-		if Drops[id] then
-			Drops[id].isOpen = false
-			if Drops[id].items == nil or next(Drops[id].items) == nil then
-				Drops[id] = nil
-				TriggerClientEvent("inventory:client:RemoveDropItem", -1, id)
-			end
-		end
-	end
-end)
+LXRCore.Commands.Add('clearinv', Lang:t('command.clearinv'), { { name = 'id', help = 'Player id' } }, true, function(src, args)
+    local Target = LXRCore.Functions.GetPlayer(tonumber(args[1]))
+    if not Target then return notify(src, 'error.invalid') end
+    Target.Functions.ClearInventory()
+    if src > 0 then notify(src, 'info.cleared', 'success') end
+end, 'admin')
 
-RegisterNetEvent('inventory:server:UseItemSlot', function(slot)
-	local src = source
-	local Player = exports['lxr-core']:GetPlayer(src)
-	local itemData = Player.Functions.GetItemBySlot(slot)
-	if itemData then
-		local itemInfo = sharedItems[itemData.name]
-		if itemData.type == "weapon" then
-			TriggerClientEvent("lxr-weapons:client:UseWeapon", src, itemData)
-			TriggerClientEvent('inventory:client:ItemBox', src, itemInfo, "use")
-		elseif itemData.useable then
-			TriggerClientEvent("LXRCore:Client:UseItem", src, itemData)
-			TriggerClientEvent('inventory:client:ItemBox', src, itemInfo, "use")
-		end
-	end
-end)
+LXRCore.Commands.Add('resetstash', Lang:t('command.resetstash'), { { name = 'id', help = 'Stash id' } }, true, function(src, args)
+    local c = getStash(tostring(args[1]))
+    c.items = {}
+    c.dirty = true
+    saveStash(c)
+    if src > 0 then notify(src, 'info.cleared', 'success') end
+end, 'admin')
 
-RegisterNetEvent('inventory:server:UseItem', function(inventory, item)
-	local src = source
-	local Player = exports['lxr-core']:GetPlayer(src)
-	if inventory == "player" or inventory == "hotbar" then
-		local itemData = Player.Functions.GetItemBySlot(item.slot)
-		if itemData then
-			TriggerClientEvent("LXRCore:Client:UseItem", src, itemData)
-		end
-	end
-end)
+-- Ensure the stash table exists (idempotent migration through the core runner)
+LXRCore.DB.RegisterMigration(RES, '0001_stashitems', ([[
+CREATE TABLE IF NOT EXISTS `%s` (
+  `id` INT(11) NOT NULL AUTO_INCREMENT,
+  `stash` VARCHAR(255) NOT NULL,
+  `items` LONGTEXT DEFAULT NULL,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`stash`),
+  KEY `id` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+]]):format(Config.Stash.table))
 
-RegisterNetEvent('inventory:server:SetInventoryData', function(fromInventory, toInventory, fromSlot, toSlot, fromAmount, toAmount)
-	local src = source
-	local Player = exports['lxr-core']:GetPlayer(src)
-	fromSlot = tonumber(fromSlot)
-	toSlot = tonumber(toSlot)
-
-	if (fromInventory == "player" or fromInventory == "hotbar") and (exports['lxr-core']:SplitStr(toInventory, "-")[1] == "itemshop" or toInventory == "crafting") then
-		return
-	end
-
-	if fromInventory == "player" or fromInventory == "hotbar" then
-		local fromItemData = Player.Functions.GetItemBySlot(fromSlot)
-		local fromAmount = tonumber(fromAmount) ~= nil and tonumber(fromAmount) or fromItemData.amount
-		if fromItemData ~= nil and fromItemData.amount >= fromAmount then
-			if toInventory == "player" or toInventory == "hotbar" then
-				local toItemData = Player.Functions.GetItemBySlot(toSlot)
-				Player.Functions.RemoveItem(fromItemData.name, fromAmount, fromSlot)
-				if string.find(fromItemData.name, 'weapon') then
-					TriggerClientEvent("lxr-weapons:client:CheckWeapon", src, fromItemData.name)
-				end
-				if toItemData ~= nil then
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						Player.Functions.RemoveItem(toItemData.name, toAmount, toSlot)
-						Player.Functions.AddItem(toItemData.name, toAmount, fromSlot, toItemData.info)
-					end
-				else
-					--Player.PlayerData.items[fromSlot] = nil
-				end
-				Player.Functions.AddItem(fromItemData.name, fromAmount, toSlot, fromItemData.info)
-			elseif exports['lxr-core']:SplitStr(toInventory, "-")[1] == "otherplayer" then
-				local playerId = tonumber(exports['lxr-core']:SplitStr(toInventory, "-")[2])
-				local OtherPlayer = exports['lxr-core']:GetPlayer(playerId)
-				local toItemData = OtherPlayer.PlayerData.items[toSlot]
-				Player.Functions.RemoveItem(fromItemData.name, fromAmount, fromSlot)
-				if string.find(fromItemData.name, 'weapon') then
-					TriggerClientEvent("lxr-weapons:client:CheckWeapon", src, fromItemData.name)
-				end
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						OtherPlayer.Functions.RemoveItem(itemInfo["name"], toAmount, fromSlot)
-						Player.Functions.AddItem(toItemData.name, toAmount, fromSlot, toItemData.info)
-						TriggerEvent("lxr-log:server:CreateLog", "robbing", "Swapped Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | *"..src.."*) swapped item; name: **"..itemInfo["name"].."**, amount: **" .. toAmount .. "** with name: **" .. fromItemData.name .. "**, amount: **" .. fromAmount.. "** with player: **".. GetPlayerName(OtherPlayer.PlayerData.source) .. "** (citizenid: *"..OtherPlayer.PlayerData.citizenid.."* | id: *"..OtherPlayer.PlayerData.source.."*)")
-					end
-				else
-					local itemInfo = sharedItems[fromItemData.name:lower()]
-					TriggerEvent("lxr-log:server:CreateLog", "robbing", "Dropped Item", "red", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | *"..src.."*) dropped new item; name: **"..itemInfo["name"].."**, amount: **" .. fromAmount .. "** to player: **".. GetPlayerName(OtherPlayer.PlayerData.source) .. "** (citizenid: *"..OtherPlayer.PlayerData.citizenid.."* | id: *"..OtherPlayer.PlayerData.source.."*)")
-				end
-				local itemInfo = sharedItems[fromItemData.name:lower()]
-				OtherPlayer.Functions.AddItem(itemInfo["name"], fromAmount, toSlot, fromItemData.info)
-			elseif exports['lxr-core']:SplitStr(toInventory, "-")[1] == "stash" then
-				local stashId = exports['lxr-core']:SplitStr(toInventory, "-")[2]
-				local toItemData = Stashes[stashId].items[toSlot]
-				Player.Functions.RemoveItem(fromItemData.name, fromAmount, fromSlot)
-				if string.find(fromItemData.name, 'weapon') then
-					TriggerClientEvent("lxr-weapons:client:CheckWeapon", src, fromItemData.name)
-				end
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						RemoveFromStash(stashId, toSlot, itemInfo["name"], toAmount)
-						Player.Functions.AddItem(toItemData.name, toAmount, fromSlot, toItemData.info)
-						TriggerEvent("lxr-log:server:CreateLog", "stash", "Swapped Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) swapped item; name: **"..itemInfo["name"].."**, amount: **" .. toAmount .. "** with name: **" .. fromItemData.name .. "**, amount: **" .. fromAmount .. "** - stash: *" .. stashId .. "*")
-					end
-				else
-					local itemInfo = sharedItems[fromItemData.name:lower()]
-					TriggerEvent("lxr-log:server:CreateLog", "stash", "Dropped Item", "red", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) dropped new item; name: **"..itemInfo["name"].."**, amount: **" .. fromAmount .. "** - stash: *" .. stashId .. "*")
-				end
-				local itemInfo = sharedItems[fromItemData.name:lower()]
-				AddToStash(stashId, toSlot, fromSlot, itemInfo["name"], fromAmount, fromItemData.info)
-			else
-				-- drop
-				toInventory = tonumber(toInventory)
-				if toInventory == nil or toInventory == 0 then
-					CreateNewDrop(src, fromSlot, toSlot, fromAmount)
-				else
-					local toItemData = Drops[toInventory].items[toSlot]
-					Player.Functions.RemoveItem(fromItemData.name, fromAmount, fromSlot)
-					if string.find(fromItemData.name, 'weapon') then
-						TriggerClientEvent("lxr-weapons:client:CheckWeapon", src, fromItemData.name)
-					end
-					if toItemData ~= nil then
-						local itemInfo = sharedItems[toItemData.name:lower()]
-						local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-						if toItemData.name ~= fromItemData.name then
-							Player.Functions.AddItem(toItemData.name, toAmount, fromSlot, toItemData.info)
-							RemoveFromDrop(toInventory, fromSlot, itemInfo["name"], toAmount)
-							TriggerEvent("lxr-log:server:CreateLog", "drop", "Swapped Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) swapped item; name: **"..itemInfo["name"].."**, amount: **" .. toAmount .. "** with name: **" .. fromItemData.name .. "**, amount: **" .. fromAmount .. "** - dropid: *" .. toInventory .. "*")
-						end
-					else
-						local itemInfo = sharedItems[fromItemData.name:lower()]
-						TriggerEvent("lxr-log:server:CreateLog", "drop", "Dropped Item", "red", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) dropped new item; name: **"..itemInfo["name"].."**, amount: **" .. fromAmount .. "** - dropid: *" .. toInventory .. "*")
-					end
-					local itemInfo = sharedItems[fromItemData.name:lower()]
-					AddToDrop(toInventory, toSlot, itemInfo["name"], fromAmount, fromItemData.info)
-				end
-			end
-		else
-			TriggerClientEvent("LXRCore:Notify", src, Lang:t("error.not_owned"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	elseif exports['lxr-core']:SplitStr(fromInventory, "-")[1] == "otherplayer" then
-		local playerId = tonumber(exports['lxr-core']:SplitStr(fromInventory, "-")[2])
-		local OtherPlayer = exports['lxr-core']:GetPlayer(playerId)
-		local fromItemData = OtherPlayer.PlayerData.items[fromSlot]
-		local fromAmount = tonumber(fromAmount) ~= nil and tonumber(fromAmount) or fromItemData.amount
-		if fromItemData ~= nil and fromItemData.amount >= fromAmount then
-			local itemInfo = sharedItems[fromItemData.name:lower()]
-			if toInventory == "player" or toInventory == "hotbar" then
-				local toItemData = Player.Functions.GetItemBySlot(toSlot)
-				OtherPlayer.Functions.RemoveItem(itemInfo["name"], fromAmount, fromSlot)
-				if string.find(fromItemData.name, 'weapon') then
-					TriggerClientEvent("lxr-weapons:client:CheckWeapon", OtherPlayer.PlayerData.source, fromItemData.name)
-				end
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						Player.Functions.RemoveItem(toItemData.name, toAmount, toSlot)
-						OtherPlayer.Functions.AddItem(itemInfo["name"], toAmount, fromSlot, toItemData.info)
-						TriggerEvent("lxr-log:server:CreateLog", "robbing", "Swapped Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) swapped item; name: **"..toItemData.name.."**, amount: **" .. toAmount .. "** with item; **"..itemInfo["name"].."**, amount: **" .. toAmount .. "** from player: **".. GetPlayerName(OtherPlayer.PlayerData.source) .. "** (citizenid: *"..OtherPlayer.PlayerData.citizenid.."* | *"..OtherPlayer.PlayerData.source.."*)")
-					end
-				else
-					TriggerEvent("lxr-log:server:CreateLog", "robbing", "Retrieved Item", "green", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) took item; name: **"..fromItemData.name.."**, amount: **" .. fromAmount .. "** from player: **".. GetPlayerName(OtherPlayer.PlayerData.source) .. "** (citizenid: *"..OtherPlayer.PlayerData.citizenid.."* | *"..OtherPlayer.PlayerData.source.."*)")
-				end
-				Player.Functions.AddItem(fromItemData.name, fromAmount, toSlot, fromItemData.info)
-			else
-				local toItemData = OtherPlayer.PlayerData.items[toSlot]
-				OtherPlayer.Functions.RemoveItem(itemInfo["name"], fromAmount, fromSlot)
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						local itemInfo = sharedItems[toItemData.name:lower()]
-						OtherPlayer.Functions.RemoveItem(itemInfo["name"], toAmount, toSlot)
-						OtherPlayer.Functions.AddItem(itemInfo["name"], toAmount, fromSlot, toItemData.info)
-					end
-				else
-					--Player.PlayerData.items[fromSlot] = nil
-				end
-				local itemInfo = sharedItems[fromItemData.name:lower()]
-				OtherPlayer.Functions.AddItem(itemInfo["name"], fromAmount, toSlot, fromItemData.info)
-			end
-		else
-			TriggerClientEvent("LXRCore:Notify", src, Lang:t("error.not_exist"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	elseif exports['lxr-core']:SplitStr(fromInventory, "-")[1] == "stash" then
-		local stashId = exports['lxr-core']:SplitStr(fromInventory, "-")[2]
-		local fromItemData = Stashes[stashId].items[fromSlot]
-		local fromAmount = tonumber(fromAmount) ~= nil and tonumber(fromAmount) or fromItemData.amount
-		if fromItemData ~= nil and fromItemData.amount >= fromAmount then
-			local itemInfo = sharedItems[fromItemData.name:lower()]
-			if toInventory == "player" or toInventory == "hotbar" then
-				local toItemData = Player.Functions.GetItemBySlot(toSlot)
-				RemoveFromStash(stashId, fromSlot, itemInfo["name"], fromAmount)
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						Player.Functions.RemoveItem(toItemData.name, toAmount, toSlot)
-						AddToStash(stashId, fromSlot, toSlot, itemInfo["name"], toAmount, toItemData.info)
-						TriggerEvent("lxr-log:server:CreateLog", "stash", "Swapped Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) swapped item; name: **"..toItemData.name.."**, amount: **" .. toAmount .. "** with item; name: **"..fromItemData.name.."**, amount: **" .. fromAmount .. "** stash: *" .. stashId .. "*")
-					else
-						TriggerEvent("lxr-log:server:CreateLog", "stash", "Stacked Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) stacked item; name: **"..toItemData.name.."**, amount: **" .. toAmount .. "** from stash: *" .. stashId .. "*")
-					end
-				else
-					TriggerEvent("lxr-log:server:CreateLog", "stash", "Received Item", "green", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) received item; name: **"..fromItemData.name.."**, amount: **" .. fromAmount.. "** stash: *" .. stashId .. "*")
-				end
-				Player.Functions.AddItem(fromItemData.name, fromAmount, toSlot, fromItemData.info)
-			else
-				local toItemData = Stashes[stashId].items[toSlot]
-				RemoveFromStash(stashId, fromSlot, itemInfo["name"], fromAmount)
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						local itemInfo = sharedItems[toItemData.name:lower()]
-						RemoveFromStash(stashId, toSlot, itemInfo["name"], toAmount)
-						AddToStash(stashId, fromSlot, toSlot, itemInfo["name"], toAmount, toItemData.info)
-					end
-				else
-					--Player.PlayerData.items[fromSlot] = nil
-				end
-				local itemInfo = sharedItems[fromItemData.name:lower()]
-				AddToStash(stashId, toSlot, fromSlot, itemInfo["name"], fromAmount, fromItemData.info)
-			end
-		else
-			TriggerClientEvent("LXRCore:Notify", src, Lang:t("error.not_exist"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	elseif exports['lxr-core']:SplitStr(fromInventory, "-")[1] == "itemshop" then
-		local shopType = exports['lxr-core']:SplitStr(fromInventory, "-")[2]
-		local itemData = ShopItems[shopType].items[fromSlot]
-		local itemInfo = sharedItems[itemData.name:lower()]
-		local bankBalance = Player.PlayerData.money["bank"]
-		local price = tonumber((itemData.price*fromAmount))
-
-		if exports['lxr-core']:SplitStr(shopType, "_")[1] == "Dealer" then
-			if exports['lxr-core']:SplitStr(itemData.name, "_")[1] == "weapon" then
-				price = tonumber(itemData.price)
-				if Player.Functions.RemoveMoney("cash", price, "dealer-item-bought") then
-					itemData.info.serie = tostring(exports['lxr-core']:RandomInt(2) .. exports['lxr-core']:RandomStr(3) .. exports['lxr-core']:RandomInt(1) .. exports['lxr-core']:RandomStr(2) .. exports['lxr-core']:RandomInt(3) .. exports['lxr-core']:RandomStr(4))
-					Player.Functions.AddItem(itemData.name, 1, toSlot, itemData.info)
-					TriggerClientEvent('lxr-drugs:client:updateDealerItems', src, itemData, 1)
-					TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("success.bought_item", {item = itemInfo["label"]}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-					TriggerEvent("lxr-log:server:CreateLog", "dealers", "Dealer item bought", "green", "**"..GetPlayerName(src) .. "** bought a " .. itemInfo["label"] .. " for $"..price)
-				else
-					TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.no_cash"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-				end
-			else
-				if Player.Functions.RemoveMoney("cash", price, "dealer-item-bought") then
-					Player.Functions.AddItem(itemData.name, fromAmount, toSlot, itemData.info)
-					TriggerClientEvent('lxr-drugs:client:updateDealerItems', src, itemData, fromAmount)
-					TriggerClientEvent('LXRCore:Notify', src, 9, itemInfo["label"] .. " bought!", 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-					TriggerEvent("lxr-log:server:CreateLog", "dealers", "Dealer item bought", "green", "**"..GetPlayerName(src) .. "** bought a " .. itemInfo["label"] .. "  for $"..price)
-				else
-					TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.no_cash"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-				end
-			end
-		elseif exports['lxr-core']:SplitStr(shopType, "_")[1] == "Itemshop" then
-			if Player.Functions.RemoveMoney("cash", price, "itemshop-bought-item") then
-                if exports['lxr-core']:SplitStr(itemData.name, "_")[1] == "weapon" then
-                    itemData.info.serie = tostring(exports['lxr-core']:RandomInt(2) .. exports['lxr-core']:RandomStr(3) .. exports['lxr-core']:RandomInt(1) .. exports['lxr-core']:RandomStr(2) .. exports['lxr-core']:RandomInt(3) .. exports['lxr-core']:RandomStr(4))
-                end
-				Player.Functions.AddItem(itemData.name, fromAmount, toSlot, itemData.info)
-				TriggerEvent('lxr-shops:server:UpdateShopItems', exports['lxr-core']:SplitStr(shopType, "_")[2], fromSlot, fromAmount)
-				TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("success.bought_item", {item = itemInfo["label"]}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-				TriggerEvent("lxr-log:server:CreateLog", "shops", "Shop item bought", "green", "**"..GetPlayerName(src) .. "** bought a " .. itemInfo["label"] .. " for $"..price)
-			elseif bankBalance >= price then
-				Player.Functions.RemoveMoney("bank", price, "itemshop-bought-item")
-                if exports['lxr-core']:SplitStr(itemData.name, "_")[1] == "weapon" then
-                    itemData.info.serie = tostring(exports['lxr-core']:RandomInt(2) .. exports['lxr-core']:RandomStr(3) .. exports['lxr-core']:RandomInt(1) .. exports['lxr-core']:RandomStr(2) .. exports['lxr-core']:RandomInt(3) .. exports['lxr-core']:RandomStr(4))
-                end
-				Player.Functions.AddItem(itemData.name, fromAmount, toSlot, itemData.info)
-				TriggerEvent('lxr-shops:server:UpdateShopItems', exports['lxr-core']:SplitStr(shopType, "_")[2], fromSlot, fromAmount)
-				TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("success.bought_item", {item = itemInfo["label"]}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-				TriggerEvent("lxr-log:server:CreateLog", "shops", "Shop item bought", "green", "**"..GetPlayerName(src) .. "** bought a " .. itemInfo["label"] .. " for $"..price)
-			else
-				TriggerClientEvent('LXRCore:Notify', src, 9, "You don't have enough cash..", 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-			end
-		else
-			if Player.Functions.RemoveMoney("cash", price, "unkown-itemshop-bought-item") then
-				Player.Functions.AddItem(itemData.name, fromAmount, toSlot, itemData.info)
-				TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("success.bought_item", {item = itemInfo["label"]}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-				TriggerEvent("lxr-log:server:CreateLog", "shops", "Shop item bought", "green", "**"..GetPlayerName(src) .. "** bought a " .. itemInfo["label"] .. " for $"..price)
-			elseif bankBalance >= price then
-				Player.Functions.RemoveMoney("bank", price, "unkown-itemshop-bought-item")
-				Player.Functions.AddItem(itemData.name, fromAmount, toSlot, itemData.info)
-				TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("success.bought_item", {item = itemInfo["label"]}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-				TriggerEvent("lxr-log:server:CreateLog", "shops", "Shop item bought", "green", "**"..GetPlayerName(src) .. "** bought a " .. itemInfo["label"] .. " for $"..price)
-			else
-				TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.no_cash"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-			end
-		end
-	elseif fromInventory == "attachment_crafting" then
-		local itemData = Config.AttachmentCrafting[fromSlot]
-		if hasCraftItems(src, itemData.costs, fromAmount) then
-			TriggerClientEvent("inventory:client:CraftAttachment", src, itemData.name, itemData.costs, fromAmount, toSlot, itemData.points)
-		else
-			TriggerClientEvent("inventory:client:UpdatePlayerInventory", src, true)
-			TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.missing_item"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	elseif fromInventory == "crafting" then
-		local itemData = Config.CraftingItems[fromSlot]
-		if hasCraftItems(src, itemData.costs, fromAmount) then
-			TriggerClientEvent("inventory:client:CraftItems", src, itemData.name, itemData.costs, fromAmount, toSlot, itemData.points)
-		else
-			TriggerClientEvent("inventory:client:UpdatePlayerInventory", src, true)
-			TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.missing_item"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	else
-		-- drop
-		fromInventory = tonumber(fromInventory)
-		local fromItemData = Drops[fromInventory].items[fromSlot]
-		local fromAmount = tonumber(fromAmount) ~= nil and tonumber(fromAmount) or fromItemData.amount
-		if fromItemData ~= nil and fromItemData.amount >= fromAmount then
-			local itemInfo = sharedItems[fromItemData.name:lower()]
-			if toInventory == "player" or toInventory == "hotbar" then
-				local toItemData = Player.Functions.GetItemBySlot(toSlot)
-				RemoveFromDrop(fromInventory, fromSlot, itemInfo["name"], fromAmount)
-				if toItemData ~= nil then
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						Player.Functions.RemoveItem(toItemData.name, toAmount, toSlot)
-						AddToDrop(fromInventory, toSlot, itemInfo["name"], toAmount, toItemData.info)
-						TriggerEvent("lxr-log:server:CreateLog", "drop", "Swapped Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) swapped item; name: **"..toItemData.name.."**, amount: **" .. toAmount .. "** with item; name: **"..fromItemData.name.."**, amount: **" .. fromAmount .. "** - dropid: *" .. fromInventory .. "*")
-					else
-						TriggerEvent("lxr-log:server:CreateLog", "drop", "Stacked Item", "orange", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) stacked item; name: **"..toItemData.name.."**, amount: **" .. toAmount .. "** - from dropid: *" .. fromInventory .. "*")
-					end
-				else
-					TriggerEvent("lxr-log:server:CreateLog", "drop", "Received Item", "green", "**".. GetPlayerName(src) .. "** (citizenid: *"..Player.PlayerData.citizenid.."* | id: *"..src.."*) received item; name: **"..fromItemData.name.."**, amount: **" .. fromAmount.. "** -  dropid: *" .. fromInventory .. "*")
-				end
-				Player.Functions.AddItem(fromItemData.name, fromAmount, toSlot, fromItemData.info)
-			else
-				toInventory = tonumber(toInventory)
-				local toItemData = Drops[toInventory].items[toSlot]
-				RemoveFromDrop(fromInventory, fromSlot, itemInfo["name"], fromAmount)
-				if toItemData ~= nil then
-					local itemInfo = sharedItems[toItemData.name:lower()]
-					local toAmount = tonumber(toAmount) ~= nil and tonumber(toAmount) or toItemData.amount
-					if toItemData.name ~= fromItemData.name then
-						local itemInfo = sharedItems[toItemData.name:lower()]
-						RemoveFromDrop(toInventory, toSlot, itemInfo["name"], toAmount)
-						AddToDrop(fromInventory, fromSlot, itemInfo["name"], toAmount, toItemData.info)
-					end
-				else
-				end
-				local itemInfo = sharedItems[fromItemData.name:lower()]
-				AddToDrop(toInventory, toSlot, itemInfo["name"], fromAmount, fromItemData.info)
-			end
-		else
-			TriggerClientEvent("LXRCore:Notify", src, Lang:t("error.not_exist"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	end
-end)
-
-RegisterNetEvent('lxr-inventory:server:SaveStashItems', function(stashId, items)
-    exports.oxmysql:insert('INSERT INTO stashitems (stash, items) VALUES (:stash, :items) ON DUPLICATE KEY UPDATE items = :items', {
-        ['stash'] = stashId,
-        ['items'] = json.encode(items)
-    })
-end)
-
-RegisterServerEvent("inventory:server:GiveItem", function(target, inventory, item, amount)
-    local src = source
-    local Player = exports['lxr-core']:GetPlayer(src)
-    local OtherPlayer = exports['lxr-core']:GetPlayer(tonumber(target))
-    local dist = #(GetEntityCoords(GetPlayerPed(src))-GetEntityCoords(GetPlayerPed(target)))
-	if Player == OtherPlayer then return TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.yourself"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE') end
-	if dist > 2 then return TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.toofar"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE') end
-	if amount <= item.amount then
-		if amount == 0 then
-			amount = item.amount
-		end
-		if OtherPlayer.Functions.AddItem(item.name, amount, false, item.info) then
-			TriggerClientEvent('inventory:client:ItemBox',target, sharedItems[item.name], "add")
-			TriggerClientEvent('LXRCore:Notify', target, Lang:t("success.recieved", {amount = amount, item = item.label, firstname = Player.PlayerData.charinfo.firstname, lastname = Player.PlayerData.charinfo.lastname}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-			TriggerClientEvent("inventory:client:UpdatePlayerInventory", target, true)
-			Player.Functions.RemoveItem(item.name, amount, item.slot)
-			TriggerClientEvent('inventory:client:ItemBox',src, sharedItems[item.name], "remove")
-			TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("success.gave", {amount = amount, item = item.label, firstname = OtherPlayer.PlayerData.charinfo.firstname, lastname = OtherPlayer.PlayerData.charinfo.lastname}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-			TriggerClientEvent("inventory:client:UpdatePlayerInventory", src, true)
-			TriggerClientEvent('lxr-inventory:client:giveAnim', src)
-			TriggerClientEvent('lxr-inventory:client:giveAnim', target)
-		else
-
-			TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.otherfull"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-			TriggerClientEvent('LXRCore:Notify', target, Lang:t("error.invfull"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-			TriggerClientEvent("inventory:client:UpdatePlayerInventory", src, false)
-			TriggerClientEvent("inventory:client:UpdatePlayerInventory", target, false)
-		end
-	else
-		TriggerClientEvent('LXRCore:Notify', src, 9, Lang:t("error.not_enough"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-	end
-end)
-
--- callback
-
-exports['lxr-core']:CreateCallback('lxr-inventory:server:GetStashItems', function(source, cb, stashId)
-	cb(GetStashItems(stashId))
-end)
-
--- command
-
-exports['lxr-core']:AddCommand("resetinv", "Reset Inventory (Admin Only)", {{name="type", help="stash"},{name="id/plate", help="ID of stash or license plate"}}, true, function(source, args)
-	local invType = args[1]:lower()
-	table.remove(args, 1)
-	local invId = table.concat(args, " ")
-	if invType ~= nil and invId ~= nil then
-		if invType == "stash" then
-			if Stashes[invId] ~= nil then
-				Stashes[invId].isOpen = false
-			end
-		else
-			TriggerClientEvent('LXRCore:Notify', source, 9, Lang:t("error.invalid_type"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	else
-		TriggerClientEvent('LXRCore:Notify', source, 9, Lang:t("error.arguments"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-	end
-end, "admin")
-
-exports['lxr-core']:AddCommand("rob", "Rob Player", {}, false, function(source, args)
-	TriggerClientEvent("police:client:RobPlayer", source)
-end)
-
-exports['lxr-core']:AddCommand("giveitem", "Give An Item (Admin Only)", {{name="id", help="Player ID"},{name="item", help="Name of the item (not a label)"}, {name="amount", help="Amount of items"}}, true, function(source, args)
-	local Player = exports['lxr-core']:GetPlayer(tonumber(args[1]))
-	local amount = tonumber(args[3]) or 1
-	local itemData = sharedItems[tostring(args[2]):lower()]
-	if Player then
-		if amount > 0 then
-			if itemData then
-				-- check iteminfo
-				local info = {}
-				if itemData["name"] == "id_card" then
-					info.citizenid = Player.PlayerData.citizenid
-					info.firstname = Player.PlayerData.charinfo.firstname
-					info.lastname = Player.PlayerData.charinfo.lastname
-					info.birthdate = Player.PlayerData.charinfo.birthdate
-					info.gender = Player.PlayerData.charinfo.gender
-					info.nationality = Player.PlayerData.charinfo.nationality
-				elseif itemData["type"] == "weapon" then
-					amount = 1
-					info.serie = tostring(exports['lxr-core']:RandomInt(2) .. exports['lxr-core']:RandomStr(3) .. exports['lxr-core']:RandomInt(1) .. exports['lxr-core']:RandomStr(2) .. exports['lxr-core']:RandomInt(3) .. exports['lxr-core']:RandomStr(4))
-				elseif itemData["name"] == "harness" then
-					info.uses = 20
-				elseif itemData["name"] == "markedbills" then
-					info.worth = math.random(5000, 10000)
-				elseif itemData["name"] == "labkey" then
-					info.lab = exports["lxr-methlab"]:GenerateRandomLab()
-				elseif itemData["name"] == "printerdocument" then
-					info.url = "https://cdn.discordapp.com/attachments/870094209783308299/870104331142189126/Logo_-_Display_Picture_-_Stylized_-_Red.png"
-				end
-
-				if Player.Functions.AddItem(itemData["name"], amount, false, info) then
-					TriggerClientEvent('LXRCore:Notify', source, 9, Lang:t("success.yougave", {amount = amount, item = itemData["name"], name = GetPlayerName(tonumber(args[1]))}), 5000, 0, 'hud_textures', 'check', 'COLOR_WHITE')
-					TriggerClientEvent('inventory:client:ItemBox', tonumber(args[1]), sharedItems[itemData["name"]], 'add')
-				else
-					TriggerClientEvent('LXRCore:Notify', source, 9,  Lang:t("error.cant_give"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-				end
-			else
-				TriggerClientEvent('LXRCore:Notify', source, 9,  Lang:t("error.not_exist"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-			end
-		else
-			TriggerClientEvent('LXRCore:Notify', source, 9,  Lang:t("error.invalid_amount"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-		end
-	else
-		TriggerClientEvent('LXRCore:Notify', source, 9,  Lang:t("error.not_online"), 5000, 0, 'mp_lobby_textures', 'cross', 'COLOR_WHITE')
-	end
-end, "admin")
-
--- item
-
-exports['lxr-core']:CreateUseableItem("driver_license", function(source, item)
-	local PlayerPed = GetPlayerPed(source)
-	local PlayerCoords = GetEntityCoords(PlayerPed)
-	for k, v in pairs(exports['lxr-core']:GetPlayers()) do
-		local TargetPed = GetPlayerPed(v)
-		local dist = #(PlayerCoords - GetEntityCoords(TargetPed))
-		if dist < 3.0 then
-			TriggerClientEvent('chat:addMessage', v,  {
-					template = '<div class="chat-message advert"><div class="chat-message-body"><strong>{0}:</strong><br><br> <strong>First Name:</strong> {1} <br><strong>Last Name:</strong> {2} <br><strong>Birth Date:</strong> {3} <br><strong>Licenses:</strong> {4}</div></div>',
-					args = {
-						"Drivers License",
-						item.info.firstname,
-						item.info.lastname,
-						item.info.birthdate,
-						item.info.type
-					}
-				}
-			)
-		end
-	end
-end)
-
-exports['lxr-core']:CreateUseableItem("id_card", function(source, item)
-	local PlayerPed = GetPlayerPed(source)
-	local PlayerCoords = GetEntityCoords(PlayerPed)
-	for k, v in pairs(exports['lxr-core']:GetPlayers()) do
-		local TargetPed = GetPlayerPed(v)
-		local dist = #(PlayerCoords - GetEntityCoords(TargetPed))
-		if dist < 3.0 then
-			local gender = "Man"
-			if item.info.gender == 1 then
-				gender = "Woman"
-			end
-			TriggerClientEvent('chat:addMessage', v,  {
-					template = '<div class="chat-message advert"><div class="chat-message-body"><strong>{0}:</strong><br><br> <strong>Civ ID:</strong> {1} <br><strong>First Name:</strong> {2} <br><strong>Last Name:</strong> {3} <br><strong>Birthdate:</strong> {4} <br><strong>Gender:</strong> {5} <br><strong>Nationality:</strong> {6}</div></div>',
-					args = {
-						"ID Card",
-						item.info.citizenid,
-						item.info.firstname,
-						item.info.lastname,
-						item.info.birthdate,
-						gender,
-						item.info.nationality
-					}
-				}
-			)
-		end
-	end
-end)
+LXRCore.Log.info('inventory', ('%s v%s ready'):format(RES, GetResourceMetadata(RES, 'version', 0)))

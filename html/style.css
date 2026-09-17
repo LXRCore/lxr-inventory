@@ -1,0 +1,151 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   🐺 LXR-INVENTORY — NUI stylesheet (LXRCore design tokens)
+   Vanilla CSS, CEF-safe. Two panels: the player's satchel and an optional
+   secondary container (stash, ground, shop, other player).
+   © 2026 iBoss21 / LXRCore | lxrcore.com | All Rights Reserved
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+    --lxr-font-sans: system-ui, "Segoe UI", "Sylfaen", "DejaVu Sans", Tahoma, Arial, sans-serif;
+    --bg: #100e0c;
+    --surface: #1a1512;
+    --card: #221c17;
+    --text: #ebe3d4;
+    --muted: rgba(200, 185, 165, .72);
+    --accent: #c4a574;
+    --danger: #a83a3a;
+    --ok: #6f9a5a;
+    --cfg-r: 12px;
+    --cfg-r-sm: 8px;
+    --cfg-edge: rgba(196, 165, 116, .18);
+    --lxr-scroll-size: 5px;
+    --lxr-scroll-thumb: rgba(196, 165, 116, .38);
+    --slot: 84px;
+    --img-lxrcore-logo: url("img/lxrcore-logo.png");
+}
+
+* { box-sizing: border-box; font-family: var(--lxr-font-sans); user-select: none; }
+body { margin: 0; background: transparent; color: var(--text); overflow: hidden; }
+.hidden { display: none !important; }
+
+#app {
+    position: fixed; inset: 0; background: transparent;
+    display: flex; align-items: center; justify-content: center; gap: 22px; padding: 16px 44px;
+}
+
+/* ── panels ─────────────────────────────────────────────────────────────── */
+.inv-panel {
+    width: min(560px, calc(50vw - 60px));
+    max-height: min(880px, calc(100vh - 32px));
+    display: flex; flex-direction: column;
+    background: rgba(16, 14, 12, .9);
+    border: 1px solid var(--cfg-edge); border-radius: var(--cfg-r);
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .9);
+}
+.inv-head {
+    display: flex; align-items: center; gap: 14px; padding: 16px 20px;
+    border-bottom: 1px solid var(--cfg-edge);
+    background: linear-gradient(180deg, rgba(196, 165, 116, .08), transparent);
+}
+.inv-head__text { flex: 1 1 auto; min-width: 0; }
+.inv-head__title { font-size: 17px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lxr-banner__avatar-wrap {
+    width: 44px; height: 44px; border-radius: 10px; flex: 0 0 auto;
+    background: #17171b; border: 1px solid var(--accent);
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.lxr-banner__avatar { width: 36px; height: 36px; object-fit: contain; }
+
+.inv-weight { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+.inv-weight__bar { flex: 1 1 auto; height: 4px; background: rgba(255, 255, 255, .06); border-radius: 2px; overflow: hidden; }
+.inv-weight__fill { height: 100%; width: 0; background: var(--accent); transition: width 200ms ease; }
+.inv-weight__fill.is-heavy { background: var(--danger); }
+
+/* ── grid ───────────────────────────────────────────────────────────────── */
+.inv-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, var(--slot)); gap: 8px;
+    padding: 16px 20px; overflow-y: auto; justify-content: start; min-height: 120px;
+}
+.inv-slot {
+    width: var(--slot); height: var(--slot); position: relative;
+    background: var(--card); border: 1px solid var(--cfg-edge); border-radius: var(--cfg-r-sm);
+    display: flex; align-items: center; justify-content: center; cursor: default;
+    transition: border-color 120ms ease, background 120ms ease;
+}
+.inv-slot--hotbar::before {
+    content: attr(data-key); position: absolute; top: 3px; left: 6px;
+    font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: .06em;
+}
+.inv-slot--filled { cursor: grab; }
+.inv-slot--filled:hover, .inv-slot--selected { border-color: var(--accent); }
+.inv-slot--over { background: rgba(196, 165, 116, .16); border-color: var(--accent); }
+.inv-slot--dragging { opacity: .35; }
+.inv-slot__img { width: 52px; height: 52px; object-fit: contain; pointer-events: none; }
+.inv-slot__tile {
+    width: 46px; height: 46px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700; color: var(--accent); background: rgba(196, 165, 116, .10); pointer-events: none;
+}
+.inv-slot__amount {
+    position: absolute; top: 3px; right: 6px; font-size: 11px; font-weight: 700; color: var(--text);
+    background: rgba(0, 0, 0, .45); padding: 1px 5px; border-radius: 4px; pointer-events: none;
+}
+.inv-slot__label {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 5px;
+    font-size: 10px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    background: linear-gradient(0deg, rgba(0, 0, 0, .55), transparent); border-radius: 0 0 var(--cfg-r-sm) var(--cfg-r-sm); pointer-events: none;
+}
+.inv-slot__price { position: absolute; top: 3px; left: 6px; font-size: 10px; font-weight: 700; color: var(--ok); pointer-events: none; }
+.inv-slot__quality { position: absolute; left: 6px; right: 6px; bottom: 18px; height: 2px; background: rgba(255,255,255,.08); pointer-events: none; }
+.inv-slot__quality i { display: block; height: 100%; background: var(--ok); }
+
+/* ── footer ─────────────────────────────────────────────────────────────── */
+.inv-foot { display: flex; align-items: center; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--cfg-edge); }
+.inv-amount { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.inv-amount .cfg-input { width: 76px; }
+.cfg-input {
+    padding: 8px 10px; border-radius: var(--cfg-r-sm); background: var(--bg); color: var(--text);
+    border: 1px solid var(--cfg-edge); font-size: 14px; outline: none;
+}
+.cfg-input:focus { border-color: var(--accent); }
+.cfg-btn {
+    appearance: none; cursor: pointer; font-size: 13px; font-weight: 600; padding: 9px 14px;
+    border-radius: var(--cfg-r-sm); border: 1px solid var(--cfg-edge); background: var(--surface); color: var(--text);
+    transition: border-color 120ms ease, background 120ms ease;
+}
+.cfg-btn:hover { border-color: var(--accent); }
+.cfg-btn:disabled { opacity: .4; cursor: not-allowed; }
+.cfg-btn--ghost { background: transparent; margin-left: auto; }
+
+/* ── tooltip ────────────────────────────────────────────────────────────── */
+.inv-tooltip {
+    position: fixed; z-index: 10; max-width: 280px; pointer-events: none;
+    background: rgba(16, 14, 12, .96); border: 1px solid var(--accent); border-radius: var(--cfg-r-sm);
+    padding: 10px 12px; font-size: 12px; line-height: 1.45; color: var(--text);
+}
+.inv-tooltip b { display: block; font-size: 13px; color: var(--accent); margin-bottom: 4px; }
+.inv-tooltip .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+/* ── item box toasts ────────────────────────────────────────────────────── */
+.inv-itembox { position: fixed; right: 24px; bottom: 24px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.inv-toast {
+    display: flex; align-items: center; gap: 10px; min-width: 220px;
+    background: rgba(16, 14, 12, .92); border: 1px solid var(--cfg-edge); border-left: 3px solid var(--ok);
+    border-radius: var(--cfg-r-sm); padding: 8px 12px; font-size: 13px;
+    animation: inv-toast-in 180ms ease, inv-toast-out 300ms ease 2600ms forwards;
+}
+.inv-toast--remove { border-left-color: var(--danger); }
+.inv-toast .inv-slot__img { width: 32px; height: 32px; }
+.inv-toast .inv-slot__tile { width: 30px; height: 30px; font-size: 14px; }
+.inv-toast small { color: var(--muted); display: block; font-size: 11px; }
+@keyframes inv-toast-in { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes inv-toast-out { to { opacity: 0; transform: translateX(20px); } }
+
+/* ── scrollbar ──────────────────────────────────────────────────────────── */
+.lxr-scroll-minimal::-webkit-scrollbar { width: var(--lxr-scroll-size); }
+.lxr-scroll-minimal::-webkit-scrollbar-thumb { background: var(--lxr-scroll-thumb); border-radius: 4px; }
+.lxr-scroll-minimal::-webkit-scrollbar-track { background: transparent; }
+
+@media (max-width: 1100px) {
+    :root { --slot: 68px; }
+    #app { padding: 16px; gap: 12px; }
+}

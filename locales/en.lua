@@ -1,71 +1,51 @@
---[[
-    ██╗     ██╗  ██╗██████╗        ██╗███╗   ██╗██╗   ██╗███████╗███╗   ██╗████████╗ ██████╗ ██████╗ ██╗   ██╗
-    ██║     ╚██╗██╔╝██╔══██╗       ██║████╗  ██║██║   ██║██╔════╝████╗  ██║╚══██╔══╝██╔═══██╗██╔══██╗╚██╗ ██╔╝
-    ██║      ╚███╔╝ ██████╔╝█████╗ ██║██╔██╗ ██║██║   ██║█████╗  ██╔██╗ ██║   ██║   ██║   ██║██████╔╝ ╚████╔╝ 
-    ██║      ██╔██╗ ██╔══██╗╚════╝ ██║██║╚██╗██║╚██╗ ██╔╝██╔══╝  ██║╚██╗██║   ██║   ██║   ██║██╔══██╗  ╚██╔╝  
-    ███████╗██╔╝ ██╗██║  ██║       ██║██║ ╚████║ ╚████╔╝ ███████╗██║ ╚████║   ██║   ╚██████╔╝██║  ██║   ██║   
-    ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝       ╚═╝╚═╝  ╚═══╝  ╚═══╝  ╚══════╝╚═╝  ╚═══╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝   ╚═╝   
+--[[ ═══════════════════════════════════════════════════════════════════════════
+     🐺 LXR-INVENTORY — Locale: English (canonical)
+     Developer   : iBoss21 | Brand : LXRCore | https://www.lxrcore.com
+     © 2026 iBoss21 / LXRCore — All Rights Reserved
+     ═══════════════════════════════════════════════════════════════════════════ ]]
 
-    🐺 LXR Inventory System — Locales (English)
-    Advanced Inventory, Crafting, Shops & Drops for RedM
-
-    ═══════════════════════════════════════════════════════════════════════════════
-    SERVER INFORMATION
-    ═══════════════════════════════════════════════════════════════════════════════
-
-    Server:    The Land of Wolves 🐺
-    Developer: iBoss21 / The Lux Empire
-    Website:   https://www.wolves.land
-    Discord:   https://discord.gg/CrKcWdfd3A
-    Store:     https://theluxempire.tebex.io
-
-    ═══════════════════════════════════════════════════════════════════════════════
-
-    © 2026 iBoss21 / The Lux Empire | wolves.land | All Rights Reserved
-]]
-
-local Translations = {
+Locale.Register('en', {
     error = {
-        failed = "Failed",
-        not_owned = "You do not own this item!", 
-        no_near = "No one nearby!",
-        no_access = "Not Accessible",
-        veh_locked = "Vehicle is locked!",
-        not_exist = "Item doesn\'t exist??",
-        no_cash = "You don\'t have enough cash..",
-        missing_item = "You don't have the right items..",
-        yourself = "You can't give yourself an item?",
-        toofar = "You are too far away to give items!",
-        otherfull = "The other players inventory is full!",
-        invfull = "Your inventory is full!",
-        not_enough = "You do not have enough items to transfer",
-        invalid_type = "Not a valid type..",
-        arguments = "Arguments not filled out correctly..",
-        cant_give = "Can't give item!",
-        invalid_amount = "Invalid Amount",
-        not_online = "Player Is Not Online",
-    },
-    success = {
-        bought_item = "%{item} bought!",
-        recieved = "You Received %{amount}x %{item} from %{firstname} %{lastname}!",
-        gave = "You gave %{firstname} %{lastname} %{amount}x %{item} !",
-        yougave = "You Have Given %{name} %{amount}x %{item} !",
+        invalid           = 'That is not possible',
+        invalid_amount    = 'Invalid amount',
+        invalid_slot      = 'Invalid slot',
+        not_owned         = 'You do not have that item',
+        too_heavy         = 'Too heavy to carry',
+        slot_occupied     = 'That slot is taken',
+        item_not_exist    = 'Unknown item',
+        not_usable        = 'You cannot use that',
+        not_enough_money  = 'Not enough money',
+        cannot_store_here = 'You cannot put items there',
+        too_far           = 'Too far away',
+        no_permission     = 'You cannot search this person',
+        in_use            = 'Someone else is using this',
+        target_full       = 'They cannot carry that',
+        nobody_nearby     = 'Nobody nearby',
     },
     info = {
-        pickup_snow = "Collecting snowballs..",
-        stash_none = "Stash-None",
-        stash = "Stash-",
-        trunk_none = "Trunk-None",
-        trunk = "Trunk-",
-        glove_none = "Glovebox-None",
-        glovebox = "Glovebox-",
-        playerLabel = "Player-",
-        dropped_none = "Dropped-None",
-        dropped = "Dropped-",
-    }
-}
-
-Lang = Locale:new({
-    phrases = Translations,
-    warnOnMissing = true
+        item_given = 'Item given',
+        cleared    = 'Inventory cleared',
+    },
+    command = {
+        giveitem   = 'Give an item to a player (admin)',
+        clearinv   = 'Clear a player inventory (admin)',
+        resetstash = 'Empty a stash (admin)',
+    },
+    ui = {
+        your_satchel = 'Your satchel',
+        ground       = 'Ground',
+        other_player = 'Their satchel',
+        weight       = 'Weight',
+        use          = 'Use',
+        give         = 'Give',
+        drop         = 'Drop',
+        close        = 'Close',
+        amount       = 'Amount',
+        buy          = 'Buy',
+        price        = 'Price',
+        received     = 'Received',
+        removed      = 'Removed',
+        empty        = 'Empty',
+        hotbar       = 'Hotbar',
+    },
 })

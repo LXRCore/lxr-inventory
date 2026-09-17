@@ -1,0 +1,49 @@
+<!doctype html>
+<!--
+    🐺 LXR-INVENTORY — Inventory NUI
+    Vanilla HTML/CSS/JS · LXRCore design tokens · Georgian-safe font stack · no CDN
+    © 2026 iBoss21 / LXRCore | lxrcore.com | All Rights Reserved
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LXR Inventory</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app" class="hidden">
+    <section class="inv-panel" id="panel-player">
+        <header class="inv-head">
+            <div class="lxr-banner__avatar-wrap"><img class="lxr-banner__avatar" src="img/lxrcore-logo.png" alt="LXRCore"></div>
+            <div class="inv-head__text">
+                <div class="inv-head__title" id="player-label">Your satchel</div>
+                <div class="inv-weight"><div class="inv-weight__bar"><div class="inv-weight__fill" id="player-weight-fill"></div></div><span id="player-weight-text"></span></div>
+            </div>
+        </header>
+        <div class="inv-grid lxr-scroll-minimal" id="grid-player" data-container="player"></div>
+        <footer class="inv-foot">
+            <label class="inv-amount"><span id="t-amount">Amount</span><input id="amount" class="cfg-input" type="number" min="1" value="1"></label>
+            <button id="btn-use" class="cfg-btn">Use</button>
+            <button id="btn-give" class="cfg-btn">Give</button>
+            <button id="btn-drop" class="cfg-btn">Drop</button>
+            <button id="btn-close" class="cfg-btn cfg-btn--ghost">Close</button>
+        </footer>
+    </section>
+
+    <section class="inv-panel inv-panel--other hidden" id="panel-other">
+        <header class="inv-head">
+            <div class="inv-head__text">
+                <div class="inv-head__title" id="other-label"></div>
+                <div class="inv-weight" id="other-weight"><div class="inv-weight__bar"><div class="inv-weight__fill" id="other-weight-fill"></div></div><span id="other-weight-text"></span></div>
+            </div>
+        </header>
+        <div class="inv-grid lxr-scroll-minimal" id="grid-other" data-container="other"></div>
+    </section>
+
+    <div id="tooltip" class="inv-tooltip hidden"></div>
+</div>
+<div id="itembox" class="inv-itembox"></div>
+<script src="app.js"></script>
+</body>
+</html>
