@@ -56,7 +56,7 @@ RegisterNetEvent('lxr-inventory:client:open', function(player, other, anchor)
     progressActive = false
     sessionAnchor = anchor
     SetNuiFocus(true, true)
-    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), hotbar = Config.Keys.hotbarSlots })
+    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand })
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════

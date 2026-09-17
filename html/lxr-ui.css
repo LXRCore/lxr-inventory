@@ -177,7 +177,45 @@
      One shadow, used sparingly. Over a game frame a heavy shadow reads as
      mud, not depth. */
   --lxr-lift: 0 24px 70px -12px rgba(0, 0, 0, 0.9);
+
+  /* --- Panel ground -------------------------------------------------------
+     What a floating panel sits on over the game frame. */
+  --lxr-panel-bg: linear-gradient(90deg, rgba(5, 5, 6, 0.85), rgba(5, 5, 6, 0.6));
+  --lxr-panel-solid: rgba(5, 5, 6, 0.75);
 }
+
+/* ==========================================================================
+   THEMES — one stylesheet, two tempers. Set by the client from
+   LXRCore.Brand.theme (lxr-core Config.UI.theme) as <html data-theme="…">.
+
+   LXR Night (default)  the kit as designed: void and pit inks, blood accent,
+                        radius 0, Fraunces for titles.
+   LXR Morning          the neutral-grey temper: #252525 ground, #343434
+                        cards, soft white hairlines, 10 px radius, Inter for
+                        titles too. Same accent, same components.
+   ========================================================================== */
+:root[data-theme='morning'],
+:root[data-theme='morning'] .lxr {
+  --lxr-void: #1c1c1c;
+  --lxr-pit: #252525;
+  --lxr-edge: rgba(255, 255, 255, 0.1);
+  --lxr-smoke: #8e8e8e;
+  --lxr-ash: #b5b5b5;
+  --lxr-bone: #fbfbfb;
+  --lxr-bone-07: rgba(251, 251, 251, 0.06);
+  --lxr-bone-26: rgba(251, 251, 251, 0.22);
+  --lxr-bone-40: rgba(251, 251, 251, 0.4);
+  --lxr-bone-65: rgba(251, 251, 251, 0.65);
+  --lxr-font-cut: 'LXR Plain', 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --lxr-track-cut: -0.01em;
+  --lxr-radius: 10px;
+  --lxr-lift: 0 12px 40px -10px rgba(0, 0, 0, 0.7);
+  --lxr-panel-bg: rgba(37, 37, 37, 0.92);
+  --lxr-panel-solid: rgba(52, 52, 52, 0.95);
+}
+:root[data-theme='morning'] .lxr .lxr-cut,
+:root[data-theme='morning'] .lxr h1,
+:root[data-theme='morning'] .lxr h2 { font-weight: 700; }
 
 /* ==========================================================================
    2. RESET

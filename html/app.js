@@ -221,6 +221,7 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Tab') e.preventDefault(); });
 
     window.addEventListener('message', (event) => {
+        { const m = event.data || {}; const th = m.theme || (m.brand && m.brand.theme) || (m.server && m.server.theme); if (th) document.documentElement.dataset.theme = th; }
         const data = event.data || {};
         switch (data.action) {
             case 'open':
