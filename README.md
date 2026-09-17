@@ -18,6 +18,9 @@ owned by **lxr-core**. This resource adds what players see and touch: the
 drag-and-drop interface, hotbar keys, stashes, ground drops, shops, giving
 items and searching other players.
 
+![Inventory and a stash](docs/img/inventory.png)
+
+
 ## Why v2
 
 | v1 (qb-inventory clone) | v2 |
