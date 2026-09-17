@@ -1,4 +1,6 @@
-# 🐺 lxr-inventory — Security model
+<img src="https://raw.githubusercontent.com/LXRCore/.github/main/profile/lxrcore-logo.png" alt="LXRCore" width="72" align="left" style="margin-right:12px">
+
+# lxr-inventory — Security model
 
 Every client message is an *intent*; the server decides. This file lists the
 attacks the resource is built against and where each defence lives.
