@@ -16,7 +16,7 @@ end
 local Shim = require('tests.lib.fxshim')
 
 -- load core shared data for item definitions
-for _, f in ipairs({ 'shared/main.lua', 'shared/locale.lua', 'locales/en.lua', 'config.lua', 'shared/items.lua' }) do
+for _, f in ipairs({ 'shared/main.lua', 'shared/locale.lua', 'locales/en.lua', 'config.lua', 'shared/catalog.lua', 'shared/items.lua', 'shared/prices.lua' }) do
     Shim.load(CORE .. '/' .. f)
 end
 Shim.load('server/containers.lua')
