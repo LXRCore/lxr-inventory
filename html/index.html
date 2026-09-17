@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-    🐺 LXR-INVENTORY — Inventory NUI
+    LXR-INVENTORY — Inventory NUI
     Vanilla HTML/CSS/JS · LXRCore design tokens · Georgian-safe font stack · no CDN
     © 2026 iBoss21 / LXRCore | lxrcore.com | All Rights Reserved
 -->
@@ -9,11 +9,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>LXR Inventory</title>
+    <link rel="stylesheet" href="lxr-ui.css">
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="lxr">
 <div id="app" class="hidden">
-    <section class="inv-panel" id="panel-player">
+    <section class="lxr-hit inv-panel" id="panel-player">
         <header class="inv-head">
             <div class="lxr-banner__avatar-wrap"><img class="lxr-banner__avatar" src="img/lxrcore-logo.png" alt="LXRCore"></div>
             <div class="inv-head__text">
@@ -31,7 +32,7 @@
         </footer>
     </section>
 
-    <section class="inv-panel inv-panel--other hidden" id="panel-other">
+    <section class="lxr-hit inv-panel inv-panel--other hidden" id="panel-other">
         <header class="inv-head">
             <div class="inv-head__text">
                 <div class="inv-head__title" id="other-label"></div>
