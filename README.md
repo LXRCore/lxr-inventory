@@ -8,7 +8,7 @@
 
 # lxr-inventory — Inventory for LXRCore v3
 
-![Version](https://img.shields.io/badge/version-2.1.0-c4a574)
+![Version](https://img.shields.io/badge/version-2.1.0-c21c37)
 ![Core](https://img.shields.io/badge/requires-lxr--core_v3-1a1512)
 ![NUI](https://img.shields.io/badge/NUI-vanilla_%C2%B7_no_CDN-brightgreen)
 ![Tests](https://img.shields.io/badge/move_engine_tests-7_passing-brightgreen)
