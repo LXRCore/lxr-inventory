@@ -51,12 +51,19 @@ local function requestOpen()
     end
 end
 
+-- what the character wears, for the centre panel (from the appearance engine when it runs)
+local function wearing()
+    if GetResourceState('lxr-clothing') ~= 'started' then return nil end
+    local ok, w = pcall(function() return exports['lxr-clothing']:Wearing() end)
+    return ok and w or nil
+end
+
 RegisterNetEvent('lxr-inventory:client:open', function(player, other, anchor)
     isOpen = true
     progressActive = false
     sessionAnchor = anchor
     SetNuiFocus(true, true)
-    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand })
+    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), lang = Config.Lang, hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand, wearing = wearing() })
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -173,6 +180,19 @@ RegisterNUICallback('drop', function(data, cb)
     if not isOpen or type(data) ~= 'table' then return end
     -- opens (or creates) the ground container next to the player, then the NUI moves into it
     TriggerServerEvent('lxr-inventory:server:open', 'ground')
+end)
+
+RegisterNUICallback('sort', function(_, cb)
+    cb({})
+    if isOpen then TriggerServerEvent('lxr-inventory:server:sort') end
+end)
+
+-- put on / take off a worn category (visual only; the record stays as bought)
+RegisterNUICallback('wear', function(data, cb)
+    cb({})
+    if not isOpen or type(data) ~= 'table' or GetResourceState('lxr-clothing') ~= 'started' then return end
+    pcall(function() exports['lxr-clothing']:ToggleCategory(data.cat, data.hidden and true or false) end)
+    SendNUIMessage({ action = 'update', wearing = wearing() })
 end)
 
 RegisterNUICallback('give', function(data, cb)

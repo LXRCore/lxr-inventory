@@ -43,6 +43,8 @@ Locale.Register('ka', {
         resetstash = 'საცავის დაცარიელება (ადმინი)',
     },
     ui = {
+        inventory = 'ინვენტარი', sort = 'დალაგება', wearing = 'რას ატარებ', put = 'ჩადება', take = 'აღება', shop = 'მაღაზია', put_on = 'ჩაცმა', take_off = 'გახდა', nothing_worn = 'არაფერი გაცვია',
+        wear_hats = 'ქუდი', wear_masks = 'ნიღაბი', wear_eyewear = 'სათვალე', wear_coats = 'ქურთუკი', wear_shirts_full = 'პერანგი', wear_vests = 'ჟილეტი', wear_pants = 'შარვალი', wear_boots = 'ჩექმები', wear_gloves = 'ხელთათმანები', wear_neckwear = 'ყელსახვევი', wear_gunbelts = 'იარაღის ქამარი', wear_satchels = 'ჩანთა',
         your_satchel = 'თქვენი ჩანთა',
         ground       = 'მიწა',
         other_player = 'მისი ჩანთა',

@@ -1,50 +1,69 @@
-<!doctype html>
-<!--
-    LXR-INVENTORY — Inventory NUI
-    Vanilla HTML/CSS/JS · LXRCore design tokens · Georgian-safe font stack · no CDN
-    © 2026 iBoss21 / LXRCore | lxrcore.com | All Rights Reserved
--->
+<!DOCTYPE html>
+<!-- LXR-INVENTORY | LXR UI Kit | © 2026 iBoss21 / LXRCore | lxrcore.com -->
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>LXR Inventory</title>
+    <title>Inventory</title>
     <link rel="stylesheet" href="lxr-ui.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="lxr">
 <div id="app" class="hidden">
-    <section class="lxr-hit inv-panel" id="panel-player">
-        <header class="inv-head">
-            <div class="lxr-banner__avatar-wrap"><img class="lxr-banner__avatar" src="img/lxrcore-logo.png" alt="LXRCore"></div>
-            <div class="inv-head__text">
-                <div class="inv-head__title" id="player-label">Your satchel</div>
-                <div class="inv-weight"><div class="inv-weight__bar"><div class="inv-weight__fill" id="player-weight-fill"></div></div><span id="player-weight-text"></span></div>
+    <div class="inv-dim"></div>
+
+    <header class="inv-top">
+        <div class="inv-brand">
+            <img class="inv-logo" src="img/lxrcore-logo.png" alt="">
+            <div>
+                <h1 class="inv-title" id="srv-name"></h1>
+                <div class="eyebrow" id="l-inventory"></div>
             </div>
-        </header>
-        <div class="inv-grid lxr-scroll-minimal" id="grid-player" data-container="player"></div>
-        <footer class="inv-foot">
-            <label class="inv-amount"><span id="t-amount">Amount</span><input id="amount" class="cfg-input" type="number" min="1" value="1"></label>
-            <button id="btn-use" class="cfg-btn">Use</button>
-            <button id="btn-give" class="cfg-btn">Give</button>
-            <button id="btn-drop" class="cfg-btn">Drop</button>
-            <button id="btn-close" class="cfg-btn cfg-btn--ghost">Close</button>
-        </footer>
+        </div>
+        <div class="inv-who lxr-hit"><span class="inv-dot"></span><span id="player-label"></span></div>
+        <div class="inv-tools lxr-hit">
+            <button class="inv-tool" id="btn-sort" title=""><span class="eyebrow" id="l-sort"></span></button>
+            <span class="inv-esc eyebrow"><span class="lxr-key">ESC</span> <span id="l-close"></span></span>
+        </div>
+    </header>
+
+    <!-- player: weight, hotbar, grid -->
+    <section class="inv-col inv-col--player lxr-hit" id="panel-player">
+        <div class="inv-weight"><span class="eyebrow" id="l-satchel"></span><span class="lxr-grow"></span><span class="inv-weight__text lxr-mono" id="player-weight"></span></div>
+        <div class="inv-weight__bar"><div class="inv-weight__fill" id="player-fill"></div></div>
+        <div class="inv-hotbar" id="hotbar-player"></div>
+        <div class="inv-grid" id="grid-player"></div>
     </section>
 
-    <section class="lxr-hit inv-panel inv-panel--other hidden" id="panel-other">
-        <header class="inv-head">
-            <div class="inv-head__text">
-                <div class="inv-head__title" id="other-label"></div>
-                <div class="inv-weight" id="other-weight"><div class="inv-weight__bar"><div class="inv-weight__fill" id="other-weight-fill"></div></div><span id="other-weight-text"></span></div>
-            </div>
-        </header>
-        <div class="inv-grid lxr-scroll-minimal" id="grid-other" data-container="other"></div>
+    <!-- centre: what you wear -->
+    <section class="inv-wear lxr-hit" id="panel-wear">
+        <div class="eyebrow" id="l-wearing"></div>
+        <div class="inv-wear__grid" id="wear-grid"></div>
     </section>
 
-    <div id="tooltip" class="inv-tooltip hidden"></div>
+    <!-- other container -->
+    <section class="inv-col inv-col--other lxr-hit" id="panel-other">
+        <div class="inv-weight"><span class="eyebrow" id="other-label"></span><span class="lxr-grow"></span><span class="inv-weight__text lxr-mono" id="other-weight"></span></div>
+        <div class="inv-weight__bar" id="other-bar"><div class="inv-weight__fill" id="other-fill"></div></div>
+        <div class="inv-grid" id="grid-other"></div>
+    </section>
+
+    <!-- detail + actions -->
+    <aside class="inv-detail lxr-hit hidden" id="detail">
+        <div class="inv-detail__head"><div class="inv-detail__tile" id="d-tile"></div><div><div class="inv-detail__name" id="d-name"></div><div class="inv-detail__meta lxr-mono" id="d-meta"></div></div></div>
+        <p class="inv-detail__desc" id="d-desc"></p>
+        <div class="inv-detail__info lxr-mono" id="d-info"></div>
+        <div class="inv-actions">
+            <label class="inv-amount"><span class="eyebrow" id="l-amount"></span><input class="lxr-input" id="amount" type="number" min="1" value="1"></label>
+            <button class="btn btn--primary" id="btn-use"></button>
+            <button class="btn" id="btn-give"></button>
+            <button class="btn" id="btn-drop"></button>
+            <button class="btn" id="btn-move"></button>
+        </div>
+    </aside>
+
+    <div class="inv-tooltip hidden" id="tooltip"></div>
 </div>
-<div id="itembox" class="inv-itembox"></div>
+<div id="itembox" class="lxr"></div>
 <script src="app.js"></script>
 </body>
 </html>

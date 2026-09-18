@@ -397,6 +397,33 @@ RegisterNetEvent('lxr-inventory:server:close', function()
     close(source)
 end)
 
+-- sort the satchel: hotbar slots keep their place, the rest is ordered by type then label
+RegisterNetEvent('lxr-inventory:server:sort', function()
+    local src = source
+    if limited(src) then return end
+    local Player = LXRCore.Functions.GetPlayer(src)
+    if not Player or not sessions[src] or blocked(src, Player, false) then return end
+    local pd = Player.PlayerData
+    local hot = Config.Keys.hotbarSlots or 5
+    local keep, rest = {}, {}
+    for slot, it in pairs(pd.items or {}) do
+        slot = tonumber(slot) or (it and it.slot)
+        if slot and it then
+            if slot <= hot then keep[slot] = it else rest[#rest + 1] = it end
+        end
+    end
+    table.sort(rest, function(a, b)
+        if (a.type or '') ~= (b.type or '') then return (a.type or '') < (b.type or '') end
+        if (a.label or a.name) ~= (b.label or b.name) then return (a.label or a.name) < (b.label or b.name) end
+        return (a.amount or 0) > (b.amount or 0)
+    end)
+    local items, slot = {}, hot + 1
+    for k, it in pairs(keep) do it.slot = k items[k] = it end
+    for _, it in ipairs(rest) do it.slot = slot items[slot] = it slot = slot + 1 end
+    Player.Functions.SetPlayerData('items', items)
+    refresh(src)
+end)
+
 RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlot, toSlot, amount)
     local src = source
     if limited(src) then return end
