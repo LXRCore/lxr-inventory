@@ -38,7 +38,7 @@ local function limited(src)
 end
 
 local function notify(src, key, kind, vars)
-    TriggerClientEvent('LXRCore:Notify', src, Lang:t(key, vars), kind or 'error')
+    LXRCore.Notify(src, Lang:t(key, vars), kind or 'error')
 end
 
 ---Player state checks shared by every action.
@@ -667,10 +667,10 @@ AddEventHandler('playerDropped', function()
     buckets[source], lastUse[source], lastGive[source], lastDropCreate[source] = nil, nil, nil, nil
 end)
 
-AddEventHandler('LXRCore:Server:OnPlayerUnload', function(src) close(src) end)
+AddEventHandler('lxr:player:unloaded', function(src) close(src) end)
 
 -- Items changed by other resources (usable items, jobs, shops of other scripts) while the UI is open
-AddEventHandler('LXRCore:Server:OnInventoryUpdate', function(src)
+AddEventHandler('lxr:inventory:changed', function(src)
     if sessions[src] then
         TriggerClientEvent('lxr-inventory:client:update', src, Containers.View(playerContainer(LXRCore.Functions.GetPlayer(src))), sessions[src].other and Containers.View(sessions[src].other) or nil)
     end
@@ -682,7 +682,7 @@ AddEventHandler('onResourceStop', function(res)
 end)
 
 -- Send current drops to late joiners
-AddEventHandler('LXRCore:Server:PlayerLoaded', function(Player)
+AddEventHandler('lxr:player:loaded', function(Player)
     local list = {}
     for id, d in pairs(drops) do list[#list + 1] = { id = id, coords = d.coords } end
     TriggerClientEvent('lxr-inventory:client:drops', Player.PlayerData.source, list)

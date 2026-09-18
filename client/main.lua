@@ -304,6 +304,6 @@ AddEventHandler('onResourceStop', function(res)
     clearProps()
 end)
 
-AddEventHandler('LXRCore:Client:OnPlayerUnload', function()
+AddEventHandler('lxr:client:unloaded', function()
     if isOpen then setOpen(false) end
 end)
