@@ -7,7 +7,7 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
 .lxr .hidden { display: none !important; }
 .lxr #app { position: fixed; inset: 0; font-family: var(--lxr-font-plain); color: var(--lxr-bone); pointer-events: none; }
 .lxr #app > * { pointer-events: auto; }
-.lxr .inv-dim { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 60%, rgba(5,5,6,.35), rgba(5,5,6,.78)); pointer-events: none; }
+.lxr .inv-dim { position: absolute; inset: 0; background: var(--lxr-panel-bg); pointer-events: none; }
 .lxr .eyebrow { font-family: var(--lxr-font-code); font-size: var(--lxr-text-micro); letter-spacing: var(--lxr-track-mono); text-transform: uppercase; color: var(--lxr-ash); }
 .lxr.lang-ka .eyebrow { font-family: var(--lxr-font-ka); text-transform: none; letter-spacing: 0; }
 
