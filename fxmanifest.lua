@@ -26,7 +26,7 @@
 
     ═══════════════════════════════════════════════════════════════════════════════
 
-    Version: 2.0.0
+    Version: 2.1.0
     Performance Target: 0.00 ms idle (drop markers only near a drop, UI loop only while open)
 
     Framework Support:
@@ -43,7 +43,7 @@ lua54 'yes'
 name 'lxr-inventory'
 author 'iBoss21 / LXRCore'
 description 'LXRCore v3 inventory UI, stashes, drops, shops'
-version '2.0.0'
+version '2.1.0'
 repository 'https://github.com/LXRCore/lxr-inventory'
 
 shared_scripts {

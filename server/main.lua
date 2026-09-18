@@ -508,6 +508,43 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
     refresh(src)
 end)
 
+-- shop purchase: client → server (NUI 'buy' callback), atomic money-then-item
+RegisterNetEvent('lxr-inventory:server:buy', function(slot, amount)
+    local src = source
+    if limited(src) then return end
+    local Player = LXRCore.Functions.GetPlayer(src)
+    local s = sessions[src]
+    if not Player or not s or not s.other or s.other.kind ~= 'shop' then return end
+    slot, amount = tonumber(slot), math.floor(tonumber(amount) or 1)
+    if slot <= 0 or amount <= 0 then return notify(src, 'error.invalid_amount') end
+    local entry = s.other.items[slot]
+    if not entry or entry.price <= 0 then return notify(src, 'error.invalid') end
+    if amount > entry.amount or amount > (Config.Shops.maxPerPurchase or 100) then return notify(src, 'error.invalid_amount') end
+    if s.anchor and distanceTo(src, s.anchor) > (s.range or Config.General.sessionRange) then
+        close(src); TriggerClientEvent('lxr-inventory:client:close', src)
+        return notify(src, 'error.too_far')
+    end
+    local mine = playerContainer(Player)
+    local price = entry.price * amount
+    local canSlot = Containers.CanPlace(mine, entry.name, amount, entry.info, nil)
+    if price > 0 and not Player.Functions.RemoveMoney(nil, price, 'shop:' .. s.other.id) then
+        return notify(src, 'error.not_enough_money')
+    end
+    local ok, why
+    if canSlot then
+        ok = Containers.PlaceAt(mine, entry.name, amount, entry.info, nil)
+    else
+        ok, why = Containers.Add(mine, entry.name, amount, entry.info)
+    end
+    if not ok then
+        if price > 0 then Player.Functions.AddMoney(nil, price, 'shop:refund') end
+        return notify(src, 'error.' .. (why or 'too_heavy'))
+    end
+    LXRCore.Log.info('inventory', ('bought %dx %s for %s'):format(amount, entry.name, price), { source = src, shop = s.other.id })
+    TriggerClientEvent('inventory:client:ItemBox', src, LXRShared.Items[entry.name], 'add', amount)
+    refresh(src)
+end)
+
 RegisterNetEvent('lxr-inventory:server:use', function(slot)
     local src = source
     if limited(src) then return end

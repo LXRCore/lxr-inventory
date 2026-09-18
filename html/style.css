@@ -44,12 +44,11 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
 .lxr .inv-slot.is-dragging { opacity: .35; }
 .lxr .inv-slot__key { position: absolute; top: 6px; left: 8px; font-family: var(--lxr-font-code); font-size: var(--lxr-text-micro); color: var(--lxr-blood-lit); }
 .lxr .inv-slot__count { position: absolute; top: 6px; right: 8px; font-family: var(--lxr-font-code); font-size: var(--lxr-text-micro); color: var(--lxr-bone); }
-.lxr .inv-slot__weight { position: absolute; bottom: 6px; right: 8px; font-family: var(--lxr-font-code); font-size: 10px; color: var(--lxr-smoke); }
 .lxr .inv-slot__img { width: 52%; height: 52%; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,.6)); }
 .lxr .inv-slot__tile { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-family: var(--lxr-font-cut); font-size: 22px; color: var(--lxr-ash); background: var(--lxr-pit); border: var(--lxr-hairline) solid var(--lxr-edge); border-radius: var(--lxr-radius); }
 .lxr .inv-slot__name { max-width: 90%; font-size: var(--lxr-text-micro); color: var(--lxr-ash); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lxr .inv-slot--empty .inv-slot__name { display: none; }
-.lxr .inv-slot--price .inv-slot__weight { color: var(--lxr-bone); }
+.lxr .inv-slot--price .slot-price { position: absolute; bottom: 6px; right: 8px; font-family: var(--lxr-font-code); font-size: 10px; color: var(--lxr-bone); }
 
 /* what you wear (centre) */
 .lxr .inv-wear { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); width: 560px; padding: var(--lxr-s4) var(--lxr-s5); background: var(--lxr-panel-solid); border-top: 1px solid var(--lxr-edge); border-radius: var(--lxr-radius); }

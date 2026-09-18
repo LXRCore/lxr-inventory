@@ -42,7 +42,7 @@
         if (item) {
             el.draggable = true;
             el.appendChild(itemVisual(item));
-            el.insertAdjacentHTML('beforeend', `<span class="inv-slot__count">${Number(item.amount) || 1}</span><span class="inv-slot__name">${esc(item.label || item.name)}</span><span class="inv-slot__weight">${c.kind === 'shop' ? esc(money(item.price)) : esc(kg((item.weight || 0) * (item.amount || 1)))}</span>`);
+            el.insertAdjacentHTML('beforeend', `<span class="inv-slot__count">${Number(item.amount) || 1}</span><span class="inv-slot__name">${esc(item.label || item.name)}</span>${c.kind === 'shop' ? '<span class="slot-price">' + esc(money(item.price)) + '</span>' : ''}`);
             el.addEventListener('click', () => { selected = { container: key, slot }; render(); });
             el.addEventListener('dblclick', () => quickMove(key, slot));
             el.addEventListener('mouseenter', (e) => showTooltip(item, c, e));
@@ -190,7 +190,15 @@
     $('btn-use').addEventListener('click', () => { if (selected && selected.container === 'player') postNUI('use', { slot: selected.slot }); });
     $('btn-give').addEventListener('click', () => { if (selected && selected.container === 'player') postNUI('give', { slot: selected.slot, amount: amountValue() }); });
     $('btn-drop').addEventListener('click', () => { if (selected && selected.container === 'player') postNUI('drop', {}); });
-    $('btn-move').addEventListener('click', () => { if (selected) quickMove(selected.container, selected.slot); });
+    $('btn-move').addEventListener('click', () => {
+        if (!selected) return;
+        const c = containers[selected.container];
+        if (c && c.kind === 'shop' && selected.container !== 'player') {
+            postNUI('buy', { slot: selected.slot, amount: amountValue() });
+        } else {
+            quickMove(selected.container, selected.slot);
+        }
+    });
     $('btn-sort').addEventListener('click', () => postNUI('sort', {}));
     document.addEventListener('keyup', (e) => { if (e.key === 'Escape' || e.key === 'Tab') postNUI('close'); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Tab') e.preventDefault(); });

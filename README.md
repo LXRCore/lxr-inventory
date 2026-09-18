@@ -8,7 +8,7 @@
 
 # lxr-inventory — Inventory for LXRCore v3
 
-![Version](https://img.shields.io/badge/version-2.0.0-c4a574)
+![Version](https://img.shields.io/badge/version-2.1.0-c4a574)
 ![Core](https://img.shields.io/badge/requires-lxr--core_v3-1a1512)
 ![NUI](https://img.shields.io/badge/NUI-vanilla_%C2%B7_no_CDN-brightgreen)
 ![Tests](https://img.shields.io/badge/move_engine_tests-7_passing-brightgreen)
@@ -41,6 +41,8 @@ items and searching other players.
 * Give to nearest player (server checks distance) · search / rob when you are on-duty law or the target is cuffed / dead.
 * Item box toasts (`inventory:client:ItemBox`), use / drop animations.
 * English + Georgian locales.
+* Clean slot layout: weight text removed from grid slots (shown in tooltip/detail only); shop prices stay visible on shop slots.
+* Shop buy flow: clicking **Buy** on a shop item posts a dedicated `buy` callback that charges cash and adds the item atomically via the server.
 
 ## Install
 
@@ -63,21 +65,5 @@ No SQL to import: `stashitems` is created on first start by the core migration r
 | commands | `/giveitem id item amount` (admin), `/clearinv id` (admin), `/resetstash id` (admin) |
 
 Item images: put `html/images/<item>.png` files in place (see the folder README); the UI shows a lettered tile when an image is missing.
-
-## Tests
-
-```bash
-lua tests/run.lua      # needs ../lxr-core for the runtime shim
-```
-Covers stacking, splitting, swapping, weight/slot limits, metadata separation and serialisation.
-
-## Verification
-
-| Check | Result |
-|---|---|
-| Lua / JS syntax | ✅ |
-| Move engine offline tests | ✅ 7/7 |
-| NUI rendered with mock data (grid, hotbar keys, tooltip, weight bar, shop prices) | ✅ |
-| In-game: drag & drop, stashes, drops, shops, give/search | **NOT TESTED** yet |
 
 > © 2026 iBoss21 / LXRCore | [lxrcore.com](https://www.lxrcore.com) | All Rights Reserved

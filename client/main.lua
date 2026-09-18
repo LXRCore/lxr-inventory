@@ -205,6 +205,12 @@ RegisterNUICallback('give', function(data, cb)
     TriggerServerEvent('lxr-inventory:server:give', GetPlayerServerId(player), tonumber(data.slot), tonumber(data.amount))
 end)
 
+RegisterNUICallback('buy', function(data, cb)
+    cb({})
+    if not isOpen or type(data) ~= 'table' then return end
+    TriggerServerEvent('lxr-inventory:server:buy', tonumber(data.slot), tonumber(data.amount))
+end)
+
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- 🎞 ANIMATIONS & TOASTS
 -- ═══════════════════════════════════════════════════════════════════════════════
