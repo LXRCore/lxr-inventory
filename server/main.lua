@@ -592,6 +592,76 @@ RegisterNetEvent('lxr-inventory:server:give', function(target, slot, amount)
     refresh(src)
 end)
 
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🔁 TRANSFER — everything, or only what the other side already holds
+-- ═══════════════════════════════════════════════════════════════════════════════
+RegisterNetEvent('lxr-inventory:server:transfer', function(direction, mode)
+    local src = source
+    if limited(src) then return end
+    local Player = LXRCore.Functions.GetPlayer(src)
+    local s = sessions[src]
+    if not Player or not s or not s.other then return end
+    if blocked(src, Player, false) then return end
+    if s.other.kind == 'shop' then return notify(src, 'error.cannot_store_here') end
+    if s.anchor and distanceTo(src, s.anchor) > (s.range or Config.General.sessionRange) then return notify(src, 'error.too_far') end
+    local mine = playerContainer(Player)
+    local from, to = mine, s.other
+    if direction == 'take' then from, to = s.other, mine end
+    if s.other.kind == 'otherplayer' and direction ~= 'take' then return notify(src, 'error.no_permission') end
+    local has = {}
+    for _, it in pairs(to.items) do if it then has[it.name] = true end end
+    local moved, lines = 0, 0
+    for slot = from.slots, 1, -1 do
+        local it = from.items[slot]
+        if it and (mode ~= 'matching' or has[it.name]) and not (it.type == 'weapon' and from.kind == 'player' and Player.PlayerData.metadata and Player.PlayerData.metadata.weaponInHand == it.name) then
+            local ok = Containers.Add(to, it.name, it.amount, it.info)
+            if ok then from.items[slot] = nil moved = moved + it.amount lines = lines + 1 end
+        end
+    end
+    if lines == 0 then return notify(src, mode == 'matching' and 'error.nothing_matching' or 'error.nothing_to_move') end
+    if from.kind == 'stash' then from.dirty = true end
+    if to.kind == 'stash' then to.dirty = true end
+    LXRCore.Log.info('inventory', ('transfer %s %s: %d items in %d lines'):format(direction, mode or 'all', moved, lines), { source = src, other = s.other.id })
+    refresh(src)
+end)
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🍂 DECAY — the catalog says what spoils into what; this is the clock
+-- ═══════════════════════════════════════════════════════════════════════════════
+local function sweepDecay(container, now)
+    local changed = false
+    for slot, it in pairs(container.items) do
+        local def = it and LXRShared.Items[it.name]
+        if def and def.decay and def.decay.hours then
+            it.info = it.info or {}
+            if not it.info.made then it.info.made = now changed = true
+            elseif now - it.info.made > def.decay.hours * 3600 then
+                local into = LXRShared.Items[def.decay.into]
+                if into then
+                    local amount = it.amount
+                    container.items[slot] = nil
+                    Containers.Add(container, into.name, amount, {})
+                else container.items[slot] = nil end
+                changed = true
+            end
+        end
+    end
+    return changed
+end
+if Config.Decay and Config.Decay.enabled then
+    CreateThread(function()
+        while true do
+            Wait((Config.Decay.sweepMinutes or 5) * 60000)
+            local now = os.time()
+            for src, Player in pairs(LXRCore.Players) do
+                local c = playerContainer(Player)
+                if sweepDecay(c, now) then Player.Functions.UpdatePlayerData() if sessions[src] then refresh(src) end end
+            end
+            for _, c in pairs(stashes or {}) do if c and sweepDecay(c, now) then c.dirty = true end end
+        end
+    end)
+end
+
 AddEventHandler('playerDropped', function()
     close(source)
     buckets[source], lastUse[source], lastGive[source], lastDropCreate[source] = nil, nil, nil, nil

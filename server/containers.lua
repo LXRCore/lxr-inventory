@@ -206,10 +206,16 @@ function Containers.View(container)
     local items = {}
     for slot, it in pairs(container.items) do
         if it then
+            local def = itemDef(it.name)
+            local fresh = nil
+            if def and def.decay and def.decay.hours and it.info and it.info.made then
+                fresh = math.max(0, math.min(1, 1 - (os.time() - it.info.made) / (def.decay.hours * 3600)))
+            end
             items[#items + 1] = {
                 slot = slot, name = it.name, label = it.label, amount = it.amount, weight = it.weight,
                 info = it.info or {}, type = it.type, useable = it.useable, unique = it.unique,
                 image = it.image, description = it.description, price = it.price,
+                rarity = def and def.rarity or 'common', category = def and def.category or 'misc', legal = not (def and def.legal == false), fresh = fresh,
             }
         end
     end

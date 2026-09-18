@@ -53,6 +53,13 @@ Config.Keys = {
 -- ████████████████████████ GENERAL SETTINGS ██████████████████████████████████████
 -- ████████████████████████████████████████████████████████████████████████████████
 
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ████████████████████████ DECAY ═════════════════════════════════════════════════
+-- ████████████████████████████████████████████████████████████████████████████████
+-- The core catalog marks what spoils (`decay = { hours, into }`); this is the clock that runs it.
+-- An item is stamped when first seen (`info.made`); past its hours it becomes `into` (spoiled food, ruined pelt).
+Config.Decay = { enabled = true, sweepMinutes = 5 }
+
 Config.General = {
     giveDistance    = 2.5,   -- Max distance to give an item to another player (metres)
     searchDistance  = 2.0,   -- Max distance to search / rob another player

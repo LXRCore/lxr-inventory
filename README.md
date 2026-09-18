@@ -44,6 +44,19 @@ items and searching other players.
 * Clean slot layout: weight text removed from grid slots (shown in tooltip/detail only); shop prices stay visible on shop slots.
 * Shop buy flow: clicking **Buy** on a shop item posts a dedicated `buy` callback that charges cash and adds the item atomically via the server.
 
+## The satchel (3.1)
+
+* **Find things** — search, category chips (food, liquor, medicine, weapons, ammo, tools, materials, hunting, papers…), sort by slot, name, amount or weight; the server's **Sort** packs the satchel.
+* **Move things** — drag between grids with a ghost under the cursor (the amount field or the mouse wheel sets how many), double-click to use / put / take / buy, right-click for the menu: use, give to the nearest, drop, split, put / take.
+* **Transfer** — put everything, put matching, take everything, take matching between the satchel and a chest, drop or wagon (`lxr-inventory:server:transfer`).
+* **What a tile tells you** — amount, weight, hotbar key, rarity as the border (uncommon → legendary), the illegal mark, a **freshness** line for food that spoils and a **condition** line for guns.
+* **Decay** — the catalog's `decay = { hours, into }` now runs: items are stamped when first seen and become their spoiled form on time (`Config.Decay`).
+* **Item boxes** — received / removed toasts with the item picture.
+
+## Building the interface
+
+Vite + React + TypeScript: source in `ui/`, built output in `html/` (`cd ui && npm install && npm run build`). `style.css` uses kit tokens only; `tools/kit_check.py` guards it.
+
 ## Install
 
 ```cfg

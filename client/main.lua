@@ -63,7 +63,7 @@ RegisterNetEvent('lxr-inventory:client:open', function(player, other, anchor)
     progressActive = false
     sessionAnchor = anchor
     SetNuiFocus(true, true)
-    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), lang = Config.Lang, hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand, wearing = wearing() })
+    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), lang = Config.Lang, hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand, wearing = wearing(), images = 'images/' })
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -180,6 +180,12 @@ RegisterNUICallback('drop', function(data, cb)
     if not isOpen or type(data) ~= 'table' then return end
     -- opens (or creates) the ground container next to the player, then the NUI moves into it
     TriggerServerEvent('lxr-inventory:server:open', 'ground')
+end)
+
+RegisterNUICallback('transfer', function(data, cb)
+    cb({})
+    if not isOpen or type(data) ~= 'table' then return end
+    TriggerServerEvent('lxr-inventory:server:transfer', data.direction == 'take' and 'take' or 'put', data.mode == 'matching' and 'matching' or 'all')
 end)
 
 RegisterNUICallback('sort', function(_, cb)

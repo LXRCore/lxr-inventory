@@ -26,6 +26,8 @@ Locale.Register('en', {
         cuffed            = 'Your hands are bound',
         too_fast          = 'Slow down',
         too_many_drops    = 'You have left too many things on the ground',
+        nothing_to_move   = 'Nothing to move',
+        nothing_matching  = 'Nothing over there matches what you carry',
     },
     progress = {
         default     = 'Searching...',
@@ -60,5 +62,11 @@ Locale.Register('en', {
         removed      = 'Removed',
         empty        = 'Empty',
         hotbar       = 'Hotbar',
+        search = 'search', all = 'All', sort_name = 'Name', sort_amount = 'Amount', sort_weight = 'Weight', sort_by = 'Sort by',
+        put_all = 'Put everything', put_matching = 'Put matching', take_all = 'Take everything', take_matching = 'Take matching',
+        split = 'Split', move = 'Move', give_closest = 'Give to the nearest', in_hand = 'in hand', fresh = 'Fresh', spoiling = 'Spoiling', condition = 'Condition', serial = 'Serial', illegal = 'Illegal',
+        cat_food = 'Food', cat_drink = 'Drink', cat_alcohol = 'Liquor', cat_medical = 'Medicine', cat_weapon = 'Weapons', cat_ammo = 'Ammo', cat_tool = 'Tools', cat_material = 'Materials', cat_hunting = 'Hunting', cat_document = 'Papers', cat_clothing = 'Clothing', cat_other = 'Other',
+        rarity_common = 'common', rarity_uncommon = 'uncommon', rarity_rare = 'rare', rarity_exquisite = 'exquisite', rarity_legendary = 'legendary',
+        tip_drag = 'drag to move · right-click for more', nothing_here = 'Nothing here', slots = 'slots', locked = 'Locked',
     },
 })

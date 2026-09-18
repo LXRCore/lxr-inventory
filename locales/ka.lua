@@ -26,6 +26,8 @@ Locale.Register('ka', {
         cuffed            = 'ხელები შეკრული გაქვთ',
         too_fast          = 'შეანელეთ',
         too_many_drops    = 'ძალიან ბევრი ნივთი დატოვეთ მიწაზე',
+        nothing_to_move   = 'გადასატანი არაფერია',
+        nothing_matching  = 'იქ არაფერია, რაც შენს ჩანთაში გაქვს',
     },
     progress = {
         default     = 'ძებნა...',
@@ -60,5 +62,11 @@ Locale.Register('ka', {
         removed      = 'წაღებულია',
         empty        = 'ცარიელი',
         hotbar       = 'სწრაფი უჯრები',
+        search = 'ძებნა', all = 'ყველა', sort_name = 'სახელი', sort_amount = 'რაოდენობა', sort_weight = 'წონა', sort_by = 'დალაგება',
+        put_all = 'ყველაფრის ჩადება', put_matching = 'მსგავსის ჩადება', take_all = 'ყველაფრის აღება', take_matching = 'მსგავსის აღება',
+        split = 'გაყოფა', move = 'გადატანა', give_closest = 'უახლოესისთვის მიცემა', in_hand = 'ხელში', fresh = 'ახალი', spoiling = 'ფუჭდება', condition = 'მდგომარეობა', serial = 'სერია', illegal = 'უკანონო',
+        cat_food = 'საკვები', cat_drink = 'სასმელი', cat_alcohol = 'ალკოჰოლი', cat_medical = 'წამალი', cat_weapon = 'იარაღი', cat_ammo = 'ტყვია', cat_tool = 'ხელსაწყო', cat_material = 'მასალა', cat_hunting = 'ნადირობა', cat_document = 'საბუთები', cat_clothing = 'ტანსაცმელი', cat_other = 'სხვა',
+        rarity_common = 'ჩვეულებრივი', rarity_uncommon = 'იშვიათი', rarity_rare = 'ძალიან იშვიათი', rarity_exquisite = 'განსაკუთრებული', rarity_legendary = 'ლეგენდარული',
+        tip_drag = 'გადაათრიე გადასატანად · მარჯვენა ღილაკი მეტისთვის', nothing_here = 'აქ არაფერია', slots = 'უჯრა', locked = 'ჩაკეტილი',
     },
 })
