@@ -44,7 +44,7 @@ Config.Lang = 'en'
 -- ████████████████████████████████████████████████████████████████████████████████
 
 Config.Keys = {
-    open    = 'TAB',   -- RegisterKeyMapping default (players can rebind in settings)
+    open    = 'I',     -- RegisterKeyMapping default (players can rebind in settings)
     hotbar  = { '1', '2', '3', '4', '5' }, -- keys for hotbar slots 1..5
     hotbarSlots = 5,
 }
