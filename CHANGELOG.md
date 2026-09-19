@@ -1,5 +1,7 @@
 # Changelog — lxr-inventory
 
+## 3.1.1 — 2026-09-19
+* Fix: nothing in the satchel could be clicked, double-clicked or dragged — the slot was a component declared inside the page, so React recreated its type on every state change and remounted every slot under the pointer mid-click and mid-drag. The slot is a plain render function now.
 ## [2.1.0] — 2026-09-17
 - Cleaner slot layout: per-slot weight text removed from grid slots (weight now lives in the tooltip and detail panel only); shop prices remain visible on shop slots via a dedicated `.slot-price` element.
 - Shop buy flow: clicking **Buy** on a shop item posts a `buy` NUI callback that triggers an atomic server-side purchase (`lxr-inventory:server:buy`) — validates the shop entry, charges cash, adds the item via Containers, and refreshes.

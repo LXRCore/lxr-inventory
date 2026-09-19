@@ -98,14 +98,16 @@ export function App() {
     if (sort !== 'slot') { const items = shown.filter((i) => i.slot >= from).sort((a, b) => sort === 'name' ? a.label.localeCompare(b.label) : sort === 'amount' ? b.amount - a.amount : b.weight * b.amount - a.weight * a.amount); order = [...items.map((i) => i.slot), ...order.filter((s) => !bySlot[s])]; }
     return order.map((slot) => {
       const it = bySlot[slot]; const hidden = filtering && !it && c.items.some((i) => i.slot === slot);
-      return <Slot key={slot} keyName={key} slot={slot} it={it} hidden={hidden} c={c} />;
+      return slotEl(key, slot, it, hidden, c);
     });
   };
-  function Slot({ keyName, slot, it, hidden, c }: { keyName: Key; slot: number; it?: Item; hidden: boolean; c: Container }) {
+  // a plain render function, NOT a component declared inside App: a component type created per render
+  // remounts every slot on each state change, and the element under the pointer dies mid-click / mid-drag
+  const slotEl = (keyName: Key, slot: number, it: Item | undefined, hidden: boolean, c: Container) => {
     const isSel = sel && sel.key === keyName && sel.slot === slot; const isOver = over && over.key === keyName && over.slot === slot;
     const cls = 'inv-slot' + (it ? ' is-' + (it.rarity || 'common') : ' inv-slot--empty') + (isSel ? ' is-on' : '') + (isOver ? ' is-over' : '') + (drag && drag.key === keyName && drag.slot === slot ? ' is-dragging' : '') + (hidden ? ' is-dim' : '') + (c.kind === 'shop' && it ? ' inv-slot--price' : '');
     return (
-      <div className={cls} data-slot={slot}
+      <div key={slot} className={cls} data-slot={slot}
         onPointerEnter={() => dragRef.current && setOver({ key: keyName, slot })} onPointerLeave={() => setOver((o) => (o && o.key === keyName && o.slot === slot ? null : o))}
         onPointerDown={it ? startDrag(keyName, it) : undefined} onClick={(e) => { e.stopPropagation(); if (it) setSel({ key: keyName, slot }); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); if (it) { setSel({ key: keyName, slot }); setMenu({ key: keyName, slot, x: e.clientX, y: e.clientY }); } }}
@@ -125,7 +127,7 @@ export function App() {
         </>}
       </div>
     );
-  }
+  };
 
   const weightBar = (c: Container) => { if (!isFinite(c.maxWeight) || c.kind === 'shop') return null; const pct = c.maxWeight > 0 ? Math.min(100, (c.weight / c.maxWeight) * 100) : 0; return <><div className="inv-weight"><span className="eyebrow">{c.label}</span><span className="lxr-grow" /><span className="inv-weight__text lxr-mono">{kg(c.weight)} / {kg(c.maxWeight)} · {c.items.length}/{c.slots} {t('ui.slots')}</span></div><div className="inv-weight__bar"><div className={'inv-weight__fill' + (pct > 90 ? ' is-heavy' : '')} style={{ width: pct + '%' }} /></div></>; };
   const menuItem = menu && C[menu.key]?.items.find((i) => i.slot === menu.slot);
