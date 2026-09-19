@@ -134,6 +134,7 @@ export function App() {
           <span className="inv-slot__foot"><span className="inv-slot__name">{it.label}</span></span>
           {it.fresh != null && <span className="inv-slot__fresh"><i style={{ width: Math.round(it.fresh * 100) + '%' }} /></span>}
           {it.info?.quality != null && it.type === 'weapon' && <span className="inv-slot__fresh inv-slot__fresh--q"><i style={{ width: Math.max(0, Math.min(100, Number(it.info.quality))) + '%' }} /></span>}
+          {it.info?.durability != null && it.type !== 'weapon' && <span className="inv-slot__fresh inv-slot__fresh--q"><i style={{ width: Math.max(0, Math.min(100, Number(it.info.durability))) + '%' }} /></span>}
           {c.kind === 'shop' && it.price != null && <span className="slot-price lxr-mono">{money(it.price)}</span>}
           {it.legal === false && <span className="inv-slot__flag lxr-mono">{t('ui.illegal')}</span>}
         </>}
@@ -177,8 +178,9 @@ export function App() {
             <div className="inv-detail__info lxr-mono">
               {selected.fresh != null && <span>{selected.fresh > 0.3 ? t('ui.fresh') : t('ui.spoiling')} {Math.round(selected.fresh * 100)}%</span>}
               {selected.info?.quality != null && <span>{t('ui.condition')} {Math.round(Number(selected.info.quality))}%</span>}
+              {selected.info?.durability != null && <span>{t('ui.condition')} {Math.round(Number(selected.info.durability))}%</span>}
               {selected.info?.serie && <span>{t('ui.serial')} {selected.info.serie}</span>}
-              {Object.entries(selected.info || {}).filter(([k]) => !['quality', 'serie', 'made'].includes(k)).map(([k, v]) => <span key={k}>{k} {typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>)}
+              {Object.entries(selected.info || {}).filter(([k]) => !['quality', 'serie', 'made', 'durability'].includes(k)).map(([k, v]) => <span key={k}>{k} {typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>)}
             </div>
             <div className="inv-actions">
               <label className="inv-amount"><span className="eyebrow">{t('ui.amount')}</span><input className="lxr-input" type="number" min={1} max={selected.amount} value={amount} onChange={(e) => setAmount(Math.max(1, Math.min(selected.amount, Number(e.target.value) || 1)))} /></label>
