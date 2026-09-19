@@ -1,6 +1,7 @@
 # Changelog — lxr-inventory
 
 ## 3.0.0 — 2026-09-19
+* Drag and drop: the slot under the cursor at release is found by position when the page did not deliver enter/leave while the button was held (the game's page); grids carry `data-key`.
 * Fix: `LXRCore.PlayerData` stays current — the core object comes back as a copy, so cash, job and metadata never changed after login in this resource. It now listens to `lxr:client:data` / `lxr:client:unloaded` and refreshes its copy.
 * The satchel opens on **I** (was TAB); players rebind it in the game's settings.
 * *What you wear* lists every piece the character actually wears (lxr-clothing's `Wearing()`, labels from its catalogue) — click a piece to take it off / put it back, **Undress** / **Dress** for the whole outfit.

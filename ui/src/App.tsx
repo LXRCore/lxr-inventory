@@ -67,9 +67,17 @@ export function App() {
     const d = { key, slot: it.slot, x: e.clientX, y: e.clientY, item: it }; dragRef.current = d; setDrag(d); setSel({ key, slot: it.slot }); setMenu(null);
   };
   const onMove = (e: RPointerEvent) => { if (!dragRef.current) return; const d = { ...dragRef.current, x: e.clientX, y: e.clientY }; dragRef.current = d; setDrag(d); };
-  const onUp = () => {
+  const onUp = (e?: RPointerEvent) => {
     const d = dragRef.current; dragRef.current = null; setDrag(null);
-    if (d && over && !(over.key === d.key && over.slot === d.slot)) post('move', { from: d.key, to: over.key, fromSlot: d.slot, toSlot: over.slot, amount: amount > 0 && amount < d.item.amount ? amount : d.item.amount });
+    // the slot under the cursor at release: the enter/leave tracking first, else the element under the point
+    // (the game's page does not always deliver pointerenter while a button is held)
+    let target = over;
+    if (d && !target && e) {
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.inv-slot') as HTMLElement | null;
+      const grid = el?.closest('[data-key]') as HTMLElement | null;
+      if (el && grid) target = { key: grid.dataset.key as Key, slot: Number(el.dataset.slot) };
+    }
+    if (d && target && !(target.key === d.key && target.slot === d.slot)) post('move', { from: d.key, to: target.key, fromSlot: d.slot, toSlot: target.slot, amount: amount > 0 && amount < d.item.amount ? amount : d.item.amount });
     setOver(null);
   };
   const onWheel = (it: Item) => (e: React.WheelEvent) => { if (!selected || selected.slot !== it.slot) return; setAmount((a) => Math.max(1, Math.min(it.amount, a + (e.deltaY < 0 ? 1 : -1)))); };
@@ -153,8 +161,8 @@ export function App() {
           <button className="lxr-chip" aria-pressed={cat === 'all'} onClick={() => setCat('all')}>{t('ui.all')}</button>
           {cats.map((c) => <button key={c} className="lxr-chip" aria-pressed={cat === c} onClick={() => setCat(c)}>{t('ui.cat_' + c)}</button>)}
         </div>
-        <div className="inv-hotbar">{grid({ ...C.player, slots: hotbar }, 'player', 1)}</div>
-        <div className="inv-grid">{grid(C.player, 'player', hotbar + 1)}</div>
+        <div className="inv-hotbar" data-key="player">{grid({ ...C.player, slots: hotbar }, 'player', 1)}</div>
+        <div className="inv-grid" data-key="player">{grid(C.player, 'player', hotbar + 1)}</div>
       </section>
 
       {/* the middle: what is picked, what you wear */}
@@ -209,7 +217,7 @@ export function App() {
               <button className="btn" onClick={() => post('transfer', { direction: 'take', mode: 'all' })}>{t('ui.take_all')}</button><button className="btn" onClick={() => post('transfer', { direction: 'take', mode: 'matching' })}>{t('ui.take_matching')}</button>
             </div>
           )}
-          <div className="inv-grid">{grid(other, 'other', 1)}</div>
+          <div className="inv-grid" data-key="other">{grid(other, 'other', 1)}</div>
         </section>
       )}
 
