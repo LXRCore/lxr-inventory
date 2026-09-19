@@ -18,6 +18,10 @@
 ]]
 
 local LXRCore = exports['lxr-core']:GetCoreObject()
+-- LXRCore crosses the export as a copy: its PlayerData would stay what it was at load. The core broadcasts every
+-- change (money, job, metadata) — keep ours current.
+RegisterNetEvent('lxr:client:data', function(d) if type(d) == 'table' then LXRCore.PlayerData = d end end)
+RegisterNetEvent('lxr:client:unloaded', function() LXRCore.PlayerData = {} end)
 
 local isOpen = false
 local dropList = {}      -- { { id, coords } }

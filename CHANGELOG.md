@@ -1,6 +1,7 @@
 # Changelog — lxr-inventory
 
 ## 3.0.0 — 2026-09-19
+* Fix: `LXRCore.PlayerData` stays current — the core object comes back as a copy, so cash, job and metadata never changed after login in this resource. It now listens to `lxr:client:data` / `lxr:client:unloaded` and refreshes its copy.
 * The satchel opens on **I** (was TAB); players rebind it in the game's settings.
 * *What you wear* lists every piece the character actually wears (lxr-clothing's `Wearing()`, labels from its catalogue) — click a piece to take it off / put it back, **Undress** / **Dress** for the whole outfit.
 * A rejected move always tells the player why (no session, invalid target, amount) — nothing is dropped silently.
