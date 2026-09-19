@@ -65,7 +65,7 @@ Config.General = {
     searchDistance  = 2.0,   -- Max distance to search / rob another player
     searchRequires  = { leoOnDuty = true, targetCuffed = true, targetDead = true }, -- any of these unlocks searching
     closeOnUse      = true,  -- Close the UI when a usable item with shouldClose is used
-    useAnimation    = { dict = 'mech_inspection@weapons@longarms@shotgun_break', anim = 'base', durationMs = 800 }, -- nil = none
+    useAnimation    = nil,   -- nil = none: each usable plays its own (consumables through lxr-hud with the item in hand)
     dropAnimation   = { dict = 'mech_pickup@ground', anim = 'putdown_low', durationMs = 900 },
     saveOnClose     = true,  -- Persist the player's inventory when the UI closes (core saves periodically anyway)
     -- Opening another container takes time (progress bar). The server re-checks distance when the
