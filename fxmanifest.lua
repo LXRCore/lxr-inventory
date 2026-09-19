@@ -47,6 +47,7 @@ version '2.1.0'
 repository 'https://github.com/LXRCore/lxr-inventory'
 
 shared_scripts {
+    '@lxr-core/shared/import.lua',   -- LXRShared: the catalog, jobs, gangs, weapons, horses, prices
     'shared/locale.lua',
     'locales/*.lua',
     'config.lua',
