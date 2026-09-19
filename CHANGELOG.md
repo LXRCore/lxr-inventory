@@ -1,5 +1,8 @@
 # Changelog — lxr-inventory
 
+## 3.0.0 — 2026-09-19
+* LXRCore v3 release line: every resource ships as 3.0.0 from here (the entries below are the road to it).
+
 ## 3.1.1 — 2026-09-19
 * Fix: nothing in the satchel could be clicked, double-clicked or dragged — the slot was a component declared inside the page, so React recreated its type on every state change and remounted every slot under the pointer mid-click and mid-drag. The slot is a plain render function now.
 ## [2.1.0] — 2026-09-17
