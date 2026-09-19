@@ -291,6 +291,7 @@ local function finishOpen(src, Player, kind, id, data)
         anchor and { x = anchor.x, y = anchor.y, z = anchor.z, range = range } or nil)
 end
 
+local close   -- defined below; open() ends a previous session first
 local function open(src, kind, id, data)
     local Player = LXRCore.Functions.GetPlayer(src)
     if not Player then return end
@@ -322,7 +323,7 @@ local function open(src, kind, id, data)
     end)
 end
 
-local function close(src)
+close = function(src)
     pendingOpen[src] = nil
     local s = sessions[src]
     if not s then return end
