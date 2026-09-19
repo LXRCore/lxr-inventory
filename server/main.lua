@@ -195,6 +195,16 @@ local function canSearch(Player, Target)
     local md = Target.PlayerData.metadata or {}
     if r.targetCuffed and md.ishandcuffed then return true end
     if r.targetDead and md.isdead then return true end
+    if r.targetHandsUp and Player(Target.PlayerData.source).state.handsup == true then
+        -- a robbery: the robber must be armed when the config says so
+        if Config.General.robRequiresGun then
+            local ped = GetPlayerPed(Player.PlayerData.source)
+            local weapon = ped ~= 0 and GetSelectedPedWeapon(ped) or 0
+            if not weapon or weapon == 0 or weapon == joaat('WEAPON_UNARMED') then return false end
+        end
+        LXRCore.Emit('lxr:inventory:robbery', nil, Player.PlayerData.source, Target.PlayerData.source)
+        return true
+    end
     return false
 end
 

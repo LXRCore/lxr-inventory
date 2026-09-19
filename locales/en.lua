@@ -49,6 +49,7 @@ Locale.Register('en', {
         resetstash = 'Empty a stash (admin)',
     },
     ui = {
+        person = 'Person', rob = 'Rob', search_person = 'Search',
         your_offer = 'Your offer', their_offer = 'Their offer', trade = 'Trade', trade_with = 'Trading with %{name}', offer_cash = 'Offer cash', confirm = 'Confirm', unconfirm = 'Unconfirm',
         waiting_partner = 'Waiting for %{name}', partner_confirmed = '%{name} confirmed', cancel_trade = 'Cancel trade', trade_request = '%{name} wants to trade', trade_request_hint = 'Both offers sit in escrow until you both confirm.', accept = 'Accept', decline = 'Decline',
         inventory = 'Inventory', sort = 'Sort', wearing = 'What you wear', put = 'Put', take = 'Take', shop = 'Shop', put_on = 'Put on', take_off = 'Take off', nothing_worn = 'Nothing worn', undress = 'Undress', dress = 'Dress',

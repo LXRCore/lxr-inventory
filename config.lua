@@ -63,7 +63,8 @@ Config.Decay = { enabled = true, sweepMinutes = 5 }
 Config.General = {
     giveDistance    = 2.5,   -- Max distance to give an item to another player (metres)
     searchDistance  = 2.0,   -- Max distance to search / rob another player
-    searchRequires  = { leoOnDuty = true, targetCuffed = true, targetDead = true }, -- any of these unlocks searching
+    searchRequires  = { leoOnDuty = true, targetCuffed = true, targetDead = true, targetHandsUp = true }, -- any of these unlocks searching (hands up = a robbery at gunpoint)
+    robRequiresGun  = true,   -- a robbery of someone with their hands up needs a gun in the robber's hands
     closeOnUse      = true,  -- Close the UI when a usable item with shouldClose is used
     useAnimation    = nil,   -- nil = none: each usable plays its own (consumables through lxr-hud with the item in hand)
     dropAnimation   = { dict = 'mech_pickup@ground', anim = 'putdown_low', durationMs = 900 },

@@ -1,6 +1,7 @@
 # Changelog — lxr-inventory
 
 ## 3.0.0 — 2026-09-19
+* Robbery at gunpoint: someone with their hands up can be searched by an armed player (`searchRequires.targetHandsUp`, `robRequiresGun`), and everyone gets Rob / Search options on people who are cuffed, dead or holding their hands up (the law's own Search stays in lxr-lawman); event `lxr:inventory:robbery`.
 * **Trade** — `/trade` (and the wheel) offers a face-to-face trade to the closest player: both offers sit in escrow, a cash offer rides along, both confirm, the swap is checked for weight, slots and money on both sides before anything moves; cancel / ESC / walking away / a disconnect returns everything (an offline owner's goods wait in a return stash swept on the next login). Shift + drag = the whole stack, Alt + drag = half. The item export surface other frameworks' scripts call (`AddItem`, `RemoveItem`, `HasItem`, `GetItemCount`, `CanAddItem`, `GetFreeWeight`, `GetSlots`, `SetItemData`, `ClearInventory`, `UseItem`, `OpenInventoryById`, `CreateInventory`, `DeleteInventory`, …) as thin wrappers over the core.
 * Drag and drop: the slot under the cursor at release is found by position when the page did not deliver enter/leave while the button was held (the game's page); grids carry `data-key`.
 * Fix: `LXRCore.PlayerData` stays current — the core object comes back as a copy, so cash, job and metadata never changed after login in this resource. It now listens to `lxr:client:data` / `lxr:client:unloaded` and refreshes its copy.

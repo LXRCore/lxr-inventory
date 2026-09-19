@@ -49,6 +49,7 @@ Locale.Register('ka', {
         resetstash = 'საცავის დაცარიელება (ადმინი)',
     },
     ui = {
+        person = 'პიროვნება', rob = 'გაძარცვა', search_person = 'გაჩხრეკა',
         your_offer = 'შენი შეთავაზება', their_offer = 'მისი შეთავაზება', trade = 'გაცვლა', trade_with = 'გაცვლა: %{name}', offer_cash = 'ფულის შეთავაზება', confirm = 'დადასტურება', unconfirm = 'გაუქმება',
         waiting_partner = 'ველოდებით %{name}-ს', partner_confirmed = '%{name}-მა დაადასტურა', cancel_trade = 'გაცვლის გაუქმება', trade_request = '%{name} გაცვლას გთავაზობს', trade_request_hint = 'ორივე შეთავაზება დაცულია, სანამ ორივე არ დაადასტურებთ.', accept = 'თანხმობა', decline = 'უარი',
         inventory = 'ინვენტარი', sort = 'დალაგება', wearing = 'რას ატარებ', put = 'ჩადება', take = 'აღება', shop = 'მაღაზია', put_on = 'ჩაცმა', take_off = 'გახდა', nothing_worn = 'არაფერი გაცვია', undress = 'გახდა', dress = 'ჩაცმა',

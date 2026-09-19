@@ -154,6 +154,21 @@ RegisterNetEvent('lxr-inventory:client:UpdateItems', function() end) -- core fir
 RegisterKeyMapping('inventory', 'Open inventory', 'keyboard', Config.Keys.open)
 RegisterCommand('inventory', requestOpen, false)
 
+-- Search / Rob on a person: anyone facing someone cuffed, dead or with their hands up (the law's own Search is lxr-lawman's)
+CreateThread(function()
+    while GetResourceState('lxr-interact') ~= 'started' do Wait(1000) end
+    local function sid(e) return GetPlayerServerId(NetworkGetPlayerIndexFromPed(e)) end
+    local function may(e)   -- the law's own Search lives in lxr-lawman; this is everyone else's
+        if not e or isOpen then return false end
+        local st = Player(sid(e)).state
+        return st.cuffed == true or st.dead == true or st.handsup == true
+    end
+    exports['lxr-interact']:AddGlobal('lxr-inventory:player', 'player', { label = Lang:t('ui.person'), distance = Config.General.searchDistance, options = {
+        { label = Lang:t('ui.rob'), key = 'R', canInteract = function(e) return may(e) and Player(sid(e)).state.handsup == true end, onSelect = function(d) TriggerServerEvent('lxr-inventory:server:open', 'otherplayer', sid(d.entity)) end },
+        { label = Lang:t('ui.search_person'), key = 'R', canInteract = function(e) return may(e) and Player(sid(e)).state.handsup ~= true end, onSelect = function(d) TriggerServerEvent('lxr-inventory:server:open', 'otherplayer', sid(d.entity)) end },
+    }})
+end)
+
 for i = 1, Config.Keys.hotbarSlots do
     RegisterKeyMapping('inventory_slot' .. i, ('Use hotbar slot %d'):format(i), 'keyboard', Config.Keys.hotbar[i] or tostring(i))
     RegisterCommand('inventory_slot' .. i, function()
