@@ -221,6 +221,32 @@ RegisterNUICallback('give', function(data, cb)
     TriggerServerEvent('lxr-inventory:server:give', GetPlayerServerId(player), tonumber(data.slot), tonumber(data.amount))
 end)
 
+-- ── trade: /trade asks the closest player; the invitation is a card with Accept / Decline
+RegisterNetEvent('lxr-inventory:client:tradeClosest', function()
+    local player, dist = LXRCore.Functions.GetClosestPlayer()
+    if player == -1 or dist > (Config.Trade.distance or 3.0) then return LXRCore.Functions.Notify(Lang:t('error.nobody_nearby'), 'error') end
+    TriggerServerEvent('lxr-inventory:server:tradeRequest', GetPlayerServerId(player))
+end)
+RegisterNetEvent('lxr-inventory:client:tradeRequest', function(from, name, ms)
+    CreateThread(function()
+        local answer = nil
+        if GetResourceState('lxr-nui') == 'started' then
+            exports['lxr-nui']:Menu({ title = Lang:t('ui.trade_request', { name = name }), subtitle = Lang:t('ui.trade_request_hint'),
+                rows = { { id = 'yes', name = Lang:t('ui.accept') }, { id = 'no', name = Lang:t('ui.decline') } } }, function(id) answer = id == 'yes' end)
+            local t = GetGameTimer() + (ms or 30000)
+            while answer == nil and GetGameTimer() < t do Wait(100) end
+        end
+        TriggerServerEvent('lxr-inventory:server:tradeAnswer', answer == true)
+    end)
+end)
+RegisterNUICallback('trade', function(data, cb)
+    cb({})
+    if not isOpen or type(data) ~= 'table' then return end
+    if data.money ~= nil then TriggerServerEvent('lxr-inventory:server:tradeMoney', tonumber(data.money) or 0)
+    elseif data.confirm then TriggerServerEvent('lxr-inventory:server:tradeConfirm')
+    elseif data.cancel then TriggerServerEvent('lxr-inventory:server:tradeCancel') end
+end)
+
 RegisterNUICallback('buy', function(data, cb)
     cb({})
     if not isOpen or type(data) ~= 'table' then return end

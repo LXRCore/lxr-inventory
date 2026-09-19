@@ -144,6 +144,22 @@ Config.Progress = {
     },
 }
 
+-- ████████████████████████████████████████████████████████████████████████████████
+-- ████████████████████████ TRADE ═════════════════════════════════════════════════
+-- ████████████████████████████████████████████████████████████████████████████████
+-- Two players, face to face: what each offers sits in escrow (out of both satchels) until both confirm;
+-- a cancel, a step away or a disconnect returns everything. Cash rides along as an offer.
+Config.Trade = {
+    enabled   = true,
+    command   = 'trade',      -- /trade asks the closest player; the wheel and lxr-interact can call the same export
+    distance  = 3.0,          -- metres between the two, checked on every step
+    slots     = 10,           -- offer size per side
+    maxWeight = 50000,        -- grams per side
+    requestMs = 30000,        -- the invitation expires
+    account   = 'cash',       -- the account an offered sum comes from
+    maxMoney  = 10000,
+}
+
 Config.Security = {
     rateLimit     = { burst = 40, windowMs = 5000 },
     maxMoveAmount = 10000,

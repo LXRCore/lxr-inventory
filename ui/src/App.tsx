@@ -5,7 +5,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEven
 import { onMessage, applyChrome, makeT, post, pad, type Msg } from './nui';
 
 type Item = { slot: number; name: string; label: string; amount: number; weight: number; info: Record<string, any>; type?: string; useable?: boolean; unique?: boolean; image?: string; description?: string; price?: number; rarity?: string; category?: string; legal?: boolean; fresh?: number | null };
-type Container = { id: string; kind: string; label: string; slots: number; maxWeight: number; weight: number; items: Item[]; account?: string };
+type Trade = { id: number; partner: string; theirs: Item[]; theirSlots: number; money: { mine: number; theirs: number }; confirmed: { mine: boolean; theirs: boolean } };
+type Container = { id: string; kind: string; label: string; slots: number; maxWeight: number; weight: number; items: Item[]; account?: string; trade?: Trade };
 type Key = 'player' | 'other';
 type Wear = Record<string, { worn?: boolean; hidden?: boolean }>;
 type Sort = 'slot' | 'name' | 'amount' | 'weight';
@@ -36,7 +37,7 @@ export function App() {
   const [sel, setSel] = useState<{ key: Key; slot: number } | null>(null);
   const [amount, setAmount] = useState(1);
   const [menu, setMenu] = useState<{ key: Key; slot: number; x: number; y: number } | null>(null);
-  const [drag, setDrag] = useState<{ key: Key; slot: number; x: number; y: number; item: Item } | null>(null);
+  const [drag, setDrag] = useState<{ key: Key; slot: number; x: number; y: number; item: Item; n?: number } | null>(null);
   const [over, setOver] = useState<{ key: Key; slot: number } | null>(null);
   const [boxes, setBoxes] = useState<Box[]>([]);
   const t = makeT(L);
@@ -64,7 +65,9 @@ export function App() {
   /* ── moving things: pointer drag with a ghost, drop on a slot ── */
   const startDrag = (key: Key, it: Item) => (e: RPointerEvent) => {
     if (e.button !== 0) return;
-    const d = { key, slot: it.slot, x: e.clientX, y: e.clientY, item: it }; dragRef.current = d; setDrag(d); setSel({ key, slot: it.slot }); setMenu(null);
+    // shift = the whole stack, alt = half of it, otherwise the amount field
+    const n = e.shiftKey ? it.amount : e.altKey ? Math.max(1, Math.floor(it.amount / 2)) : undefined;
+    const d = { key, slot: it.slot, x: e.clientX, y: e.clientY, item: it, n }; dragRef.current = d; setDrag(d); setSel({ key, slot: it.slot }); setMenu(null);
   };
   const onMove = (e: RPointerEvent) => { if (!dragRef.current) return; const d = { ...dragRef.current, x: e.clientX, y: e.clientY }; dragRef.current = d; setDrag(d); };
   const onUp = (e?: RPointerEvent) => {
@@ -77,7 +80,7 @@ export function App() {
       const grid = el?.closest('[data-key]') as HTMLElement | null;
       if (el && grid) target = { key: grid.dataset.key as Key, slot: Number(el.dataset.slot) };
     }
-    if (d && target && !(target.key === d.key && target.slot === d.slot)) post('move', { from: d.key, to: target.key, fromSlot: d.slot, toSlot: target.slot, amount: amount > 0 && amount < d.item.amount ? amount : d.item.amount });
+    if (d && target && !(target.key === d.key && target.slot === d.slot)) post('move', { from: d.key, to: target.key, fromSlot: d.slot, toSlot: target.slot, amount: d.n ?? (amount > 0 && amount < d.item.amount ? amount : d.item.amount) });
     setOver(null);
   };
   const onWheel = (it: Item) => (e: React.WheelEvent) => { if (!selected || selected.slot !== it.slot) return; setAmount((a) => Math.max(1, Math.min(it.amount, a + (e.deltaY < 0 ? 1 : -1)))); };
@@ -211,13 +214,36 @@ export function App() {
       {other && (
         <section className="inv-col inv-col--other lxr-hit">
           {weightBar(other) || <div className="inv-weight"><span className="eyebrow">{other.label}</span></div>}
-          {other.kind !== 'shop' && (
+          {other.kind === 'trade' && other.trade && (
+            <div className="inv-trade">
+              <div className="inv-trade__head"><span className="eyebrow">{t('ui.trade_with', { name: other.trade.partner })}</span><span className="lxr-grow" />
+                <span className={'lxr-mono inv-trade__state' + (other.trade.confirmed.theirs ? ' is-ok' : '')}>{other.trade.confirmed.theirs ? t('ui.partner_confirmed', { name: other.trade.partner }) : t('ui.waiting_partner', { name: other.trade.partner })}</span></div>
+              <div className="inv-trade__cash">
+                <label className="inv-amount"><span className="eyebrow">{t('ui.offer_cash')}</span><input className="lxr-input" type="number" min={0} defaultValue={other.trade.money.mine} onBlur={(e) => post('trade', { money: Math.max(0, Number(e.target.value) || 0) })} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} /></label>
+                <span className="lxr-mono inv-trade__theirmoney">{t('ui.their_offer')}: {money(other.trade.money.theirs)}</span>
+              </div>
+              <div className="inv-trade__actions">
+                <button className={'btn' + (other.trade.confirmed.mine ? '' : ' btn--primary')} onClick={() => post('trade', { confirm: true })}>{other.trade.confirmed.mine ? t('ui.unconfirm') : t('ui.confirm')}</button>
+                <button className="btn" onClick={() => post('trade', { cancel: true })}>{t('ui.cancel_trade')}</button>
+              </div>
+            </div>
+          )}
+          {other.kind !== 'shop' && other.kind !== 'trade' && (
             <div className="inv-transfer">
               {other.kind !== 'otherplayer' && <><button className="btn" onClick={() => post('transfer', { direction: 'put', mode: 'all' })}>{t('ui.put_all')}</button><button className="btn" onClick={() => post('transfer', { direction: 'put', mode: 'matching' })}>{t('ui.put_matching')}</button></>}
               <button className="btn" onClick={() => post('transfer', { direction: 'take', mode: 'all' })}>{t('ui.take_all')}</button><button className="btn" onClick={() => post('transfer', { direction: 'take', mode: 'matching' })}>{t('ui.take_matching')}</button>
             </div>
           )}
           <div className="inv-grid" data-key="other">{grid(other, 'other', 1)}</div>
+          {other.kind === 'trade' && other.trade && (
+            <>
+              <div className="inv-weight"><span className="eyebrow">{t('ui.their_offer')}</span><span className="lxr-grow" /><span className="lxr-mono inv-weight__text">{other.trade.theirs.length}/{other.trade.theirSlots}</span></div>
+              <div className="inv-grid inv-grid--theirs">{Array.from({ length: other.trade.theirSlots }, (_, i) => i + 1).map((slot) => { const it = other.trade!.theirs.find((x) => x.slot === slot); return (
+                <div key={slot} className={'inv-slot inv-slot--ro' + (it ? ' is-' + (it.rarity || 'common') : ' inv-slot--empty')} onClick={() => it && setSel(null)}>
+                  {it && <><span className="inv-slot__count lxr-mono">{it.amount}</span><img className="inv-slot__img" src={img(it)} alt="" draggable={false} /><span className="inv-slot__foot"><span className="inv-slot__name">{it.label}</span></span></>}
+                </div>); })}</div>
+            </>
+          )}
         </section>
       )}
 
@@ -235,7 +261,7 @@ export function App() {
       )}
 
       {/* the ghost under the cursor */}
-      {drag && <div className="inv-ghost" style={{ left: drag.x, top: drag.y }}><img src={img(drag.item)} alt="" /><span className="lxr-mono">{amount > 0 && amount < drag.item.amount ? amount : drag.item.amount}</span></div>}
+      {drag && <div className="inv-ghost" style={{ left: drag.x, top: drag.y }}><img src={img(drag.item)} alt="" /><span className="lxr-mono">{drag.n ?? (amount > 0 && amount < drag.item.amount ? amount : drag.item.amount)}</span></div>}
       <Boxes boxes={boxes} img={img} t={t} />
     </div>
   );

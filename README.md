@@ -52,6 +52,8 @@ items and searching other players.
 * **What a tile tells you** — amount, weight, hotbar key, rarity as the border (uncommon → legendary), the illegal mark, a **freshness** line for food that spoils and a **condition** line for guns.
 * **Decay** — the catalog's `decay = { hours, into }` now runs: items are stamped when first seen and become their spoiled form on time (`Config.Decay`).
 * **Item boxes** — received / removed toasts with the item picture.
+* **Trade** (3.0) — `/trade` asks the closest player; both see a trade table: your offer (drag in, drag out), their offer, a cash offer, Confirm. What is offered leaves the satchel into escrow at once; the swap happens only when both have confirmed and both can carry and pay — otherwise everything goes back (cancel, ESC, walking away, a disconnect; an offline owner's goods wait in a return stash swept on the next login). Any change to either side clears both confirmations. `Config.Trade`.
+* **Drag modifiers** — Shift + drag moves the whole stack, Alt + drag half of it; otherwise the amount field (or the mouse wheel over the tile) decides.
 
 ## Building the interface
 
@@ -74,6 +76,8 @@ No SQL to import: `stashitems` is created on first start by the core migration r
 | `exports['lxr-inventory']:GetStashItems(id)` / `AddStashItem(id, name, amount, info)` / `RemoveStashItem(id, name, amount)` / `ClearStash(id)` | |
 | `exports['lxr-inventory']:RegisterShop(id, def)` | |
 | `exports['lxr-inventory']:GetSlotData(src, slot)` | |
+| `exports['lxr-inventory']:TradeRequest(src, targetSrc)` | the face-to-face trade (also `/trade` → the closest player) |
+| item surface for third-party scripts | `AddItem(src, name, amount, slot?, info?, reason?)`, `RemoveItem(src, name, amount, slot?, reason?)`, `HasItem(src, items, amount?)`, `GetItemCount`, `GetItemByName`, `GetItemsByName`, `GetItemBySlot`, `GetInventory`, `CanAddItem`, `GetTotalWeight`, `GetFreeWeight`, `GetSlots` (used, free), `GetSlotsByItem`, `GetFirstSlotByItem`, `SetItemData(src, slot, info)`, `ClearInventory(src, keep?)`, `UseItem(src, item)`, `OpenInventoryById(src, target)`, `CreateInventory(id, { slots, weight, label })`, `DeleteInventory(id)` — all thin wrappers over the core's `LXRCore.Inventory` |
 | events kept for legacy resources | `inventory:server:OpenInventory`, `inventory:client:ItemBox`, `inventory:server:UseItemSlot`, `lxr-inventory:client:giveAnim`, `inventory:client:DropItemAnim`, `lxr-inventory:server:GetStashItems` (callback) |
 | commands | `/giveitem id item amount` (admin), `/clearinv id` (admin), `/resetstash id` (admin) |
 

@@ -205,6 +205,210 @@ local function within(src, target, range)
 end
 
 ---Resolve (kind, id, data) to a container the requesting player may use.
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 🤝 TRADE — two escrows, both confirm, then the swap (or everything goes back)
+-- ═══════════════════════════════════════════════════════════════════════════════
+local trades = {}        -- id → { id, a, b, esc = { [src] = container }, money = { [src] = n }, ok = { [src] = bool }, at }
+local tradeOf = {}       -- src → trade id
+local invites = {}       -- target src → { from, at }
+local tradeSeq = 0
+local refresh, close     -- defined below
+
+local function tradeName(src)
+    local P = LXRCore.Functions.GetPlayer(src)
+    local c = P and P.PlayerData.charinfo or {}
+    local n = ((c.firstname or '') .. ' ' .. (c.lastname or '')):gsub('^%s+', '')
+    return n ~= '' and n or (GetPlayerName(src) or tostring(src))
+end
+local function partnerOf(tr, src) return tr.a == src and tr.b or tr.a end
+local function tradeInfo(tr, src)
+    local other = partnerOf(tr, src)
+    return {
+        id = tr.id, partner = tradeName(other),
+        theirs = Containers.View(tr.esc[other]).items, theirSlots = tr.esc[other].slots,
+        money = { mine = tr.money[src] or 0, theirs = tr.money[other] or 0 },
+        confirmed = { mine = tr.ok[src] == true, theirs = tr.ok[other] == true },
+    }
+end
+-- give a side's escrow back to its owner (online: the satchel; offline: a return stash swept on next login)
+local function returnEscrow(tr, src)
+    local esc = tr.esc[src]
+    if not esc or Containers.IsEmpty(esc) then return end
+    local P = LXRCore.Functions.GetPlayer(src)
+    local target = P and playerContainer(P)
+    if not target then
+        local cid = tr.cid[src]
+        if cid then target = getStash('trade-return-' .. cid, { slots = esc.slots, weight = esc.maxWeight * 4 }) target.dirty = true end
+    end
+    for slot, it in pairs(esc.items) do
+        if it and target then
+            local ok = Containers.Add(target, it.name, it.amount, it.info)
+            if not ok then LXRCore.Log.error('inventory', ('trade: could not return %dx %s to %s'):format(it.amount, it.name, tostring(src))) end
+        end
+        esc.items[slot] = nil
+    end
+    if target and target.kind == 'stash' then saveStash(target) end
+    if P then P.Functions.UpdatePlayerData() end
+end
+local function endTrade(tr, reason)
+    if not trades[tr.id] then return end
+    trades[tr.id] = nil
+    for _, s in ipairs({ tr.a, tr.b }) do
+        tradeOf[s] = nil
+        returnEscrow(tr, s)
+        if sessions[s] and sessions[s].kind == 'trade' then
+            sessions[s] = nil
+            TriggerClientEvent('lxr-inventory:client:close', s)
+        end
+        if reason and LXRCore.Functions.GetPlayer(s) then notify(s, 'info.trade_' .. reason) end
+    end
+    LXRCore.Log.info('inventory', 'trade ended: ' .. tostring(reason), { a = tr.a, b = tr.b })
+end
+local function tradeRefresh(tr)
+    for _, s in ipairs({ tr.a, tr.b }) do if sessions[s] and sessions[s].kind == 'trade' then refresh(s) end end
+end
+-- the swap: both must be able to carry the other's offer and pay their own sum; nothing moves otherwise
+local function settleTrade(tr)
+    local A, B = LXRCore.Functions.GetPlayer(tr.a), LXRCore.Functions.GetPlayer(tr.b)
+    if not A or not B then return endTrade(tr, 'cancelled') end
+    local acct = Config.Trade.account or 'cash'
+    for _, s in ipairs({ tr.a, tr.b }) do
+        local P = s == tr.a and A or B
+        if (tr.money[s] or 0) > (P.PlayerData.money[acct] or 0) then tr.ok = {} notify(s, 'error.not_enough_money') tradeRefresh(tr) return end
+    end
+    -- a dry run on copies of both satchels
+    for _, s in ipairs({ tr.a, tr.b }) do
+        local P = s == tr.a and A or B
+        local other = partnerOf(tr, s)
+        local probe = Containers.New('probe', 'player', Containers.Deserialize(Containers.Serialize(playerContainer(P))), tonumber(P.PlayerData.slots) or LXRCore.Config.Player.maxSlots, tonumber(P.PlayerData.weight) or LXRCore.Config.Player.maxWeight, 'probe')
+        for _, it in pairs(tr.esc[other].items) do
+            if it and not Containers.Add(probe, it.name, it.amount, it.info) then
+                tr.ok = {}
+                notify(s, 'error.trade_cannot_carry') notify(other, 'error.trade_partner_full')
+                tradeRefresh(tr) return
+            end
+        end
+    end
+    -- the swap
+    for _, s in ipairs({ tr.a, tr.b }) do
+        local P = s == tr.a and A or B
+        local other = partnerOf(tr, s)
+        local mine = playerContainer(P)
+        for slot, it in pairs(tr.esc[other].items) do
+            if it then Containers.Add(mine, it.name, it.amount, it.info) tr.esc[other].items[slot] = nil end
+        end
+        local give = tr.money[s] or 0
+        if give > 0 then P.Functions.RemoveMoney(acct, give, 'trade:' .. tr.id) end
+        local get = tr.money[other] or 0
+        if get > 0 then P.Functions.AddMoney(acct, get, 'trade:' .. tr.id) end
+    end
+    LXRCore.Log.info('inventory', 'trade settled', { a = tr.a, b = tr.b, moneyA = tr.money[tr.a], moneyB = tr.money[tr.b] })
+    LXRCore.Emit('lxr:inventory:traded', nil, tr.a, tr.b)
+    trades[tr.id] = nil
+    for _, s in ipairs({ tr.a, tr.b }) do
+        tradeOf[s] = nil
+        if sessions[s] and sessions[s].kind == 'trade' then sessions[s] = nil TriggerClientEvent('lxr-inventory:client:close', s) end
+        notify(s, 'info.trade_done', 'success')
+        local P = s == tr.a and A or B
+        P.Functions.UpdatePlayerData()
+    end
+end
+local function startTrade(a, b)
+    tradeSeq = tradeSeq + 1
+    local id = tradeSeq
+    local A, B = LXRCore.Functions.GetPlayer(a), LXRCore.Functions.GetPlayer(b)
+    if not A or not B then return end
+    local function esc(s) return Containers.New('trade-' .. id .. '-' .. s, 'trade', {}, Config.Trade.slots, Config.Trade.maxWeight, Lang:t('ui.your_offer'), { owner = s }) end
+    local tr = { id = id, a = a, b = b, esc = { [a] = esc(a), [b] = esc(b) }, money = {}, ok = {}, at = os.time(), cid = { [a] = A.PlayerData.citizenid, [b] = B.PlayerData.citizenid } }
+    trades[id] = tr
+    tradeOf[a], tradeOf[b] = id, id
+    for _, s in ipairs({ a, b }) do
+        if sessions[s] then close(s) end
+        local P = s == a and A or B
+        local other = partnerOf(tr, s)
+        local anchorPed = GetPlayerPed(other)
+        sessions[s] = { other = tr.esc[s], otherId = tr.esc[s].id, kind = 'trade', anchor = anchorPed ~= 0 and GetEntityCoords(anchorPed) or nil, range = Config.Trade.distance + 1.0, moves = 0, trade = id }
+        local view = Containers.View(tr.esc[s]); view.trade = tradeInfo(tr, s)
+        TriggerClientEvent('lxr-inventory:client:open', s, Containers.View(playerContainer(P)), view, nil)
+    end
+    LXRCore.Log.info('inventory', 'trade started', { a = a, b = b })
+end
+local function tradeRequest(src, target)
+    if not Config.Trade.enabled then return end
+    local P, T = LXRCore.Functions.GetPlayer(src), LXRCore.Functions.GetPlayer(tonumber(target))
+    if not P or not T or T == P then return notify(src, 'error.nobody_nearby') end
+    if blocked(src, P, false) then return end
+    if tradeOf[src] or tradeOf[T.PlayerData.source] then return notify(src, 'error.trade_busy') end
+    if not within(src, T.PlayerData.source, Config.Trade.distance) then return notify(src, 'error.too_far') end
+    local ts = T.PlayerData.source
+    if invites[ts] and os.time() - invites[ts].at < Config.Trade.requestMs / 1000 then return notify(src, 'error.trade_busy') end
+    invites[ts] = { from = src, at = os.time() }
+    TriggerClientEvent('lxr-inventory:client:tradeRequest', ts, src, tradeName(src), Config.Trade.requestMs)
+    notify(src, 'info.trade_sent')
+end
+RegisterNetEvent('lxr-inventory:server:tradeRequest', function(target) local src = source if limited(src) then return end tradeRequest(src, target) end)
+RegisterNetEvent('lxr-inventory:server:tradeAnswer', function(yes)
+    local src = source
+    if limited(src) then return end
+    local inv = invites[src]
+    invites[src] = nil
+    if not inv then return end
+    if os.time() - inv.at > Config.Trade.requestMs / 1000 then return end
+    if not yes then return notify(inv.from, 'info.trade_declined') end
+    if tradeOf[src] or tradeOf[inv.from] then return end
+    if not LXRCore.Functions.GetPlayer(inv.from) or not within(src, inv.from, Config.Trade.distance) then return notify(src, 'error.too_far') end
+    startTrade(inv.from, src)
+end)
+RegisterNetEvent('lxr-inventory:server:tradeMoney', function(amount)
+    local src = source
+    if limited(src) then return end
+    local tr = tradeOf[src] and trades[tradeOf[src]]
+    if not tr then return end
+    amount = math.floor(tonumber(amount) or 0)
+    if amount < 0 or amount > (Config.Trade.maxMoney or 10000) then return notify(src, 'error.invalid_amount') end
+    local P = LXRCore.Functions.GetPlayer(src)
+    if not P or amount > (P.PlayerData.money[Config.Trade.account or 'cash'] or 0) then return notify(src, 'error.not_enough_money') end
+    tr.money[src] = amount
+    tr.ok = {}
+    tradeRefresh(tr)
+end)
+RegisterNetEvent('lxr-inventory:server:tradeConfirm', function()
+    local src = source
+    if limited(src) then return end
+    local tr = tradeOf[src] and trades[tradeOf[src]]
+    if not tr then return end
+    if not within(tr.a, tr.b, Config.Trade.distance + 1.0) then return endTrade(tr, 'cancelled') end
+    tr.ok[src] = not tr.ok[src]
+    if tr.ok[tr.a] and tr.ok[tr.b] then return settleTrade(tr) end
+    tradeRefresh(tr)
+end)
+RegisterNetEvent('lxr-inventory:server:tradeCancel', function()
+    local src = source
+    local tr = tradeOf[src] and trades[tradeOf[src]]
+    if tr then endTrade(tr, 'cancelled') end
+end)
+AddEventHandler('lxr:player:dropped', function(P)
+    local src = P and P.PlayerData and P.PlayerData.source
+    local tr = src and tradeOf[src] and trades[tradeOf[src]]
+    if tr then endTrade(tr, 'cancelled') end
+end)
+-- a return stash left by a trade that ended while its owner was gone is swept back on login
+AddEventHandler('lxr:player:loaded', function(P)
+    local cid = P and P.PlayerData and P.PlayerData.citizenid
+    if not cid then return end
+    local id = 'trade-return-' .. cid
+    if not LXRCore.DB.Scalar(('SELECT stash FROM `%s` WHERE stash = ? LIMIT 1'):format(Config.Stash.table), { id }) then return end
+    local st = getStash(id)
+    local mine = playerContainer(P)
+    for slot, it in pairs(st.items) do if it and Containers.Add(mine, it.name, it.amount, it.info) then st.items[slot] = nil end end
+    st.dirty = true saveStash(st)
+    P.Functions.UpdatePlayerData()
+end)
+exports('TradeRequest', tradeRequest)
+LXRCore.Commands.Add(Config.Trade.command or 'trade', Lang:t('command.trade'), {}, false, function(src)
+    TriggerClientEvent('lxr-inventory:client:tradeClosest', src)
+end)
+
 local function resolveOther(src, Player, kind, id, data)
     if kind == 'stash' then
         if type(id) ~= 'string' or id == '' or #id > 100 then return nil, 'invalid' end
@@ -251,6 +455,10 @@ local function resolveOther(src, Player, kind, id, data)
         if not c then return nil, 'invalid' end
         if c.coords and distanceTo(src, c.coords) > (c.distance or 3.0) then return nil, 'too_far' end
         return c
+    elseif kind == 'trade' then
+        local tr = tradeOf[src] and trades[tradeOf[src]]
+        if not tr then return nil, 'invalid' end
+        return tr.esc[src]
     elseif kind == 'otherplayer' then
         local target = LXRCore.Functions.GetPlayer(tonumber(id))
         if not target or target.PlayerData.source == src then return nil, 'invalid' end
@@ -291,7 +499,6 @@ local function finishOpen(src, Player, kind, id, data)
         anchor and { x = anchor.x, y = anchor.y, z = anchor.z, range = range } or nil)
 end
 
-local close   -- defined below; open() ends a previous session first
 local function open(src, kind, id, data)
     local Player = LXRCore.Functions.GetPlayer(src)
     if not Player then return end
@@ -327,6 +534,12 @@ close = function(src)
     pendingOpen[src] = nil
     local s = sessions[src]
     if not s then return end
+    if s.kind == 'trade' then
+        sessions[src] = nil
+        local tr = tradeOf[src] and trades[tradeOf[src]]
+        if tr then endTrade(tr, 'cancelled') end
+        return
+    end
     if s.other then
         if s.other.openBy == src then s.other.openBy = nil end
         if s.other.kind == 'stash' and s.other.dirty then saveStash(s.other) end
@@ -339,12 +552,17 @@ close = function(src)
     end
 end
 
-local function refresh(src)
+refresh = function(src)
     local Player = LXRCore.Functions.GetPlayer(src)
     local s = sessions[src]
     if not Player then return end
     Player.Functions.UpdatePlayerData()
-    TriggerClientEvent('lxr-inventory:client:update', src, Containers.View(playerContainer(Player)), s and s.other and Containers.View(s.other) or nil)
+    local view = s and s.other and Containers.View(s.other) or nil
+    if view and s.kind == 'trade' then
+        local tr = trades[s.trade]
+        if tr then view.trade = tradeInfo(tr, src) end
+    end
+    TriggerClientEvent('lxr-inventory:client:update', src, Containers.View(playerContainer(Player)), view)
     if s and s.other and s.other.kind == 'otherplayer' then
         local target = s.other.player
         if target then target.Functions.UpdatePlayerData() end
@@ -488,6 +706,10 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
 
     local ok, why, action = Containers.Move(from, to, fromSlot, toSlot, amount)
     if not ok then return notify(src, 'error.' .. (why or 'invalid')) end
+    if s.kind == 'trade' then
+        local tr = trades[s.trade]
+        if tr then tr.ok = {} tradeRefresh(tr) end
+    end
     if from.kind == 'stash' then from.dirty = true end
     if to.kind == 'stash' then to.dirty = true end
     if from ~= to then
@@ -598,6 +820,10 @@ end)
 -- 🔁 TRANSFER — everything, or only what the other side already holds
 -- ═══════════════════════════════════════════════════════════════════════════════
 RegisterNetEvent('lxr-inventory:server:transfer', function(direction, mode)
+    if sessions[source] and sessions[source].kind == 'trade' then
+        local tr = trades[sessions[source].trade]
+        if tr then SetTimeout(0, function() tr.ok = {} tradeRefresh(tr) end) end
+    end
     local src = source
     if limited(src) then return end
     local Player = LXRCore.Functions.GetPlayer(src)
@@ -696,6 +922,39 @@ end)
 
 exports('OpenInventory', function(src, kind, id, data) open(src, kind, id, data) end)
 exports('CloseInventory', function(src) close(src) TriggerClientEvent('lxr-inventory:client:close', src) end)
+-- ── the item surface other scripts expect from an inventory (the names every RedM framework's scripts call);
+--    thin wrappers over the core's inventory API, so a third-party script ports with a resource-name change
+local Inv = LXRCore.Inventory
+local function playerOf(src) return LXRCore.Functions.GetPlayer(tonumber(src)) end
+exports('AddItem', function(src, name, amount, slot, info, reason) return Inv.AddItem(tonumber(src), name, amount, slot, info, reason or RES) end)
+exports('RemoveItem', function(src, name, amount, slot, reason) return Inv.RemoveItem(tonumber(src), name, amount, slot, reason or RES) end)
+exports('HasItem', function(src, items, amount) return Inv.HasItem(tonumber(src), items, amount) end)
+exports('GetItemCount', function(src, name) return Inv.GetItemCount(tonumber(src), name) end)
+exports('GetItemByName', function(src, name) return Inv.GetItem(tonumber(src), name) end)
+exports('GetItemsByName', function(src, name)
+    local out = {}
+    for _, it in pairs(Inv.GetItems(tonumber(src)) or {}) do if it and it.name == name then out[#out + 1] = it end end
+    return out
+end)
+exports('GetItemBySlot', function(src, slot) local P = playerOf(src) return P and P.PlayerData.items[tonumber(slot)] or nil end)
+exports('GetInventory', function(src) return Inv.GetItems(tonumber(src)) end)
+exports('CanAddItem', function(src, name, amount) return Inv.CanCarry(tonumber(src), name, amount) end)
+exports('GetTotalWeight', function(src) local P = playerOf(src) return P and Inv.GetTotalWeight(P.PlayerData.items) or 0 end)
+exports('GetFreeWeight', function(src) local P = playerOf(src) if not P then return 0 end return (tonumber(P.PlayerData.weight) or LXRCore.Config.Player.maxWeight) - Inv.GetTotalWeight(P.PlayerData.items) end)
+exports('GetSlots', function(src) local P = playerOf(src) if not P then return 0, 0 end local used = 0 for _, it in pairs(P.PlayerData.items) do if it then used = used + 1 end end return used, (tonumber(P.PlayerData.slots) or LXRCore.Config.Player.maxSlots) - used end)
+exports('GetSlotsByItem', function(src, name) local P = playerOf(src) return P and Inv.GetSlotsByItem(P.PlayerData.items, name) or {} end)
+exports('GetFirstSlotByItem', function(src, name) local P = playerOf(src) return P and Inv.GetFirstSlotByItem(P.PlayerData.items, name) or nil end)
+exports('SetItemData', function(src, slot, info) return Inv.SetMetadata(tonumber(src), tonumber(slot), info) end)
+exports('ClearInventory', function(src, keep) return Inv.ClearInventory(tonumber(src), keep) end)
+exports('UseItem', function(src, item) return LXRCore.Items.Use(tonumber(src), item) end)
+exports('OpenInventoryById', function(src, target) open(tonumber(src), 'otherplayer', tonumber(target)) end)
+exports('CreateInventory', function(id, data) return getStash(id, data) ~= nil end)
+exports('DeleteInventory', function(id)
+    local st = getStash(id)
+    for k in pairs(st.items) do st.items[k] = nil end
+    st.dirty = true saveStash(st) stashes[id] = nil
+    return true
+end)
 exports('GetStashItems', function(id) return Containers.Serialize(getStash(id)) end)
 exports('AddStashItem', function(id, name, amount, info)
     local c = getStash(id)

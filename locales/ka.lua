@@ -6,6 +6,7 @@
 
 Locale.Register('ka', {
     error = {
+        trade_busy = 'გაცვლა ახლა ვერ დაიწყება.', trade_cannot_carry = 'ვერ წაიღებ იმას, რასაც გთავაზობს.', trade_partner_full = 'ის ვერ წაიღებს შენს შეთავაზებას.',
         invalid           = 'ეს შეუძლებელია',
         no_session        = 'ჩანთამ სესია დაკარგა — თავიდან გახსენი',
         invalid_amount    = 'არასწორი რაოდენობა',
@@ -37,15 +38,19 @@ Locale.Register('ka', {
         otherplayer = 'ჯიბეების ჩხრეკა...',
     },
     info = {
+        trade_sent = 'გაცვლის შეთავაზება გაიგზავნა.', trade_declined = 'უარი თქვა.', trade_cancelled = 'გაცვლა გაუქმდა; ყველაფერი დაბრუნდა.', trade_done = 'გაცვლა დასრულდა.',
         item_given = 'ნივთი გადაეცა',
         cleared    = 'ინვენტარი გასუფთავდა',
     },
     command = {
+        trade = 'შესთავაზე გაცვლა უახლოეს მოთამაშეს',
         giveitem   = 'ნივთის მიცემა მოთამაშისთვის (ადმინი)',
         clearinv   = 'მოთამაშის ინვენტარის გასუფთავება (ადმინი)',
         resetstash = 'საცავის დაცარიელება (ადმინი)',
     },
     ui = {
+        your_offer = 'შენი შეთავაზება', their_offer = 'მისი შეთავაზება', trade = 'გაცვლა', trade_with = 'გაცვლა: %{name}', offer_cash = 'ფულის შეთავაზება', confirm = 'დადასტურება', unconfirm = 'გაუქმება',
+        waiting_partner = 'ველოდებით %{name}-ს', partner_confirmed = '%{name}-მა დაადასტურა', cancel_trade = 'გაცვლის გაუქმება', trade_request = '%{name} გაცვლას გთავაზობს', trade_request_hint = 'ორივე შეთავაზება დაცულია, სანამ ორივე არ დაადასტურებთ.', accept = 'თანხმობა', decline = 'უარი',
         inventory = 'ინვენტარი', sort = 'დალაგება', wearing = 'რას ატარებ', put = 'ჩადება', take = 'აღება', shop = 'მაღაზია', put_on = 'ჩაცმა', take_off = 'გახდა', nothing_worn = 'არაფერი გაცვია', undress = 'გახდა', dress = 'ჩაცმა',
         wear_hats = 'ქუდი', wear_masks = 'ნიღაბი', wear_eyewear = 'სათვალე', wear_coats = 'ქურთუკი', wear_shirts_full = 'პერანგი', wear_vests = 'ჟილეტი', wear_pants = 'შარვალი', wear_boots = 'ჩექმები', wear_gloves = 'ხელთათმანები', wear_neckwear = 'ყელსახვევი', wear_gunbelts = 'იარაღის ქამარი', wear_satchels = 'ჩანთა',
         your_satchel = 'თქვენი ჩანთა',

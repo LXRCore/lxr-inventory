@@ -6,6 +6,7 @@
 
 Locale.Register('en', {
     error = {
+        trade_busy = 'That trade cannot start right now.', trade_cannot_carry = 'You cannot carry what they offer.', trade_partner_full = 'They cannot carry what you offer.',
         invalid           = 'That is not possible',
         no_session        = 'The satchel lost its session — open it again',
         invalid_amount    = 'Invalid amount',
@@ -37,15 +38,19 @@ Locale.Register('en', {
         otherplayer = 'Searching pockets...',
     },
     info = {
+        trade_sent = 'Trade offer sent.', trade_declined = 'They declined.', trade_cancelled = 'The trade was cancelled; everything went back.', trade_done = 'Trade complete.',
         item_given = 'Item given',
         cleared    = 'Inventory cleared',
     },
     command = {
+        trade = 'Offer a trade to the closest player',
         giveitem   = 'Give an item to a player (admin)',
         clearinv   = 'Clear a player inventory (admin)',
         resetstash = 'Empty a stash (admin)',
     },
     ui = {
+        your_offer = 'Your offer', their_offer = 'Their offer', trade = 'Trade', trade_with = 'Trading with %{name}', offer_cash = 'Offer cash', confirm = 'Confirm', unconfirm = 'Unconfirm',
+        waiting_partner = 'Waiting for %{name}', partner_confirmed = '%{name} confirmed', cancel_trade = 'Cancel trade', trade_request = '%{name} wants to trade', trade_request_hint = 'Both offers sit in escrow until you both confirm.', accept = 'Accept', decline = 'Decline',
         inventory = 'Inventory', sort = 'Sort', wearing = 'What you wear', put = 'Put', take = 'Take', shop = 'Shop', put_on = 'Put on', take_off = 'Take off', nothing_worn = 'Nothing worn', undress = 'Undress', dress = 'Dress',
         wear_hats = 'Hat', wear_masks = 'Mask', wear_eyewear = 'Eyewear', wear_coats = 'Coat', wear_shirts_full = 'Shirt', wear_vests = 'Vest', wear_pants = 'Pants', wear_boots = 'Boots', wear_gloves = 'Gloves', wear_neckwear = 'Neckwear', wear_gunbelts = 'Gun belt', wear_satchels = 'Satchel',
         your_satchel = 'Your satchel',

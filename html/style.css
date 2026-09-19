@@ -106,6 +106,17 @@ html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
 .lxr .inv-seg { display: flex; gap: 4px; }
 .lxr .inv-cats { display: flex; flex-wrap: wrap; gap: 4px; }
 .lxr .inv-transfer { display: grid; grid-template-columns: 1fr 1fr; gap: var(--lxr-s1); }
+/* the trade table: partner state, cash offer, confirm; their offer is a read-only grid below yours */
+.lxr .inv-trade { display: flex; flex-direction: column; gap: var(--lxr-s2); padding: var(--lxr-s2) 0; border-bottom: var(--lxr-hairline) solid var(--lxr-edge); }
+.lxr .inv-trade__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lxr-s1) var(--lxr-s3); }
+.lxr .inv-trade__head .lxr-grow { display: none; }
+.lxr .inv-trade__state { flex-basis: 100%; font-size: var(--lxr-text-micro); color: var(--lxr-smoke); }
+.lxr .inv-trade__state.is-ok { color: var(--lxr-bone); }
+.lxr .inv-trade__cash { display: flex; align-items: flex-end; gap: var(--lxr-s3); }
+.lxr .inv-trade__theirmoney { font-size: var(--lxr-text-micro); color: var(--lxr-smoke); padding-bottom: 8px; }
+.lxr .inv-trade__actions { display: grid; grid-template-columns: 1fr 1fr; gap: var(--lxr-s1); }
+.lxr .inv-slot--ro { cursor: default; opacity: .92; }
+.lxr .inv-grid--theirs { margin-top: var(--lxr-s1); }
 .lxr .inv-transfer .btn { padding: 8px 10px; }
 .lxr .inv-slot.is-dim { opacity: .25; }
 .lxr .inv-slot__foot { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; justify-content: center; }

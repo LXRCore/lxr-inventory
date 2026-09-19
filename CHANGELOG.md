@@ -1,6 +1,7 @@
 # Changelog — lxr-inventory
 
 ## 3.0.0 — 2026-09-19
+* **Trade** — `/trade` (and the wheel) offers a face-to-face trade to the closest player: both offers sit in escrow, a cash offer rides along, both confirm, the swap is checked for weight, slots and money on both sides before anything moves; cancel / ESC / walking away / a disconnect returns everything (an offline owner's goods wait in a return stash swept on the next login). Shift + drag = the whole stack, Alt + drag = half. The item export surface other frameworks' scripts call (`AddItem`, `RemoveItem`, `HasItem`, `GetItemCount`, `CanAddItem`, `GetFreeWeight`, `GetSlots`, `SetItemData`, `ClearInventory`, `UseItem`, `OpenInventoryById`, `CreateInventory`, `DeleteInventory`, …) as thin wrappers over the core.
 * Drag and drop: the slot under the cursor at release is found by position when the page did not deliver enter/leave while the button was held (the game's page); grids carry `data-key`.
 * Fix: `LXRCore.PlayerData` stays current — the core object comes back as a copy, so cash, job and metadata never changed after login in this resource. It now listens to `lxr:client:data` / `lxr:client:unloaded` and refreshes its copy.
 * The satchel opens on **I** (was TAB); players rebind it in the game's settings.
