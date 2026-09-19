@@ -7,6 +7,7 @@
 Locale.Register('en', {
     error = {
         invalid           = 'That is not possible',
+        no_session        = 'The satchel lost its session — open it again',
         invalid_amount    = 'Invalid amount',
         invalid_slot      = 'Invalid slot',
         not_owned         = 'You do not have that item',
@@ -45,7 +46,7 @@ Locale.Register('en', {
         resetstash = 'Empty a stash (admin)',
     },
     ui = {
-        inventory = 'Inventory', sort = 'Sort', wearing = 'What you wear', put = 'Put', take = 'Take', shop = 'Shop', put_on = 'Put on', take_off = 'Take off', nothing_worn = 'Nothing worn',
+        inventory = 'Inventory', sort = 'Sort', wearing = 'What you wear', put = 'Put', take = 'Take', shop = 'Shop', put_on = 'Put on', take_off = 'Take off', nothing_worn = 'Nothing worn', undress = 'Undress', dress = 'Dress',
         wear_hats = 'Hat', wear_masks = 'Mask', wear_eyewear = 'Eyewear', wear_coats = 'Coat', wear_shirts_full = 'Shirt', wear_vests = 'Vest', wear_pants = 'Pants', wear_boots = 'Boots', wear_gloves = 'Gloves', wear_neckwear = 'Neckwear', wear_gunbelts = 'Gun belt', wear_satchels = 'Satchel',
         your_satchel = 'Your satchel',
         ground       = 'Ground',

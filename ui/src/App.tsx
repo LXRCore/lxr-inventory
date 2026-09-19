@@ -29,6 +29,7 @@ export function App() {
   const [hotbar, setHotbar] = useState(5);
   const [images, setImages] = useState('images/');
   const [wearing, setWearing] = useState<Wear | null>(null);
+  const [wearLabels, setWearLabels] = useState<Record<string, string>>({});
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('all');
   const [sort, setSort] = useState<Sort>('slot');
@@ -43,8 +44,8 @@ export function App() {
 
   useEffect(() => onMessage((m: Msg) => {
     applyChrome(m);
-    if (m.action === 'open') { setL(m.locale || {}); setHotbar(m.hotbar || 5); if (m.images) setImages(m.images); setWearing(m.wearing || null); setC({ player: m.player || null, other: m.other || null }); setOpen(true); setSel(null); setMenu(null); setQ(''); setCat('all'); }
-    else if (m.action === 'update') { setC((c) => ({ player: m.player !== undefined ? m.player : c.player, other: m.other !== undefined ? (m.other || null) : c.other })); if (m.wearing !== undefined) setWearing(m.wearing || null); }
+    if (m.action === 'open') { setL(m.locale || {}); setHotbar(m.hotbar || 5); if (m.images) setImages(m.images); setWearing(m.wearing || null); if (m.wearLabels) setWearLabels(m.wearLabels); setC({ player: m.player || null, other: m.other || null }); setOpen(true); setSel(null); setMenu(null); setQ(''); setCat('all'); }
+    else if (m.action === 'update') { setC((c) => ({ player: m.player !== undefined ? m.player : c.player, other: m.other !== undefined ? (m.other || null) : c.other })); if (m.wearing !== undefined) setWearing(m.wearing || null); if (m.wearLabels) setWearLabels(m.wearLabels); }
     else if (m.action === 'itembox') { const id = ++boxSeq; setBoxes((b) => [...b, { id, label: m.item?.label || m.item?.name || '', name: m.item?.name || '', kind: m.kind, amount: m.amount || 1 }]); setTimeout(() => setBoxes((b) => b.filter((x) => x.id !== id)), 3200); }
     else if (m.action === 'close') { setOpen(false); setMenu(null); setDrag(null); }
   }), []);
@@ -182,7 +183,18 @@ export function App() {
         {!other && wearing && (
           <section className="inv-wear lxr-hit">
             <div className="eyebrow">{t('ui.wearing')}</div>
-            <div className="inv-wear__grid">{WEAR.map(([c, path]) => { const w = wearing[c]; const worn = w?.worn, hidden = w?.hidden; return <button key={c} className={'inv-wear__slot' + (!worn || hidden ? ' is-off' : '')} title={worn ? (hidden ? t('ui.put_on') : t('ui.take_off')) : t('ui.nothing_worn')} onClick={() => worn && post('wear', { cat: c, hidden: !hidden })}><svg className="inv-wear__ico" viewBox="0 0 24 24"><path d={path} /></svg><span className="inv-wear__name">{t('ui.wear_' + c)}</span></button>; })}</div>
+            {(() => {
+              // every piece the character wears (lxr-clothing's Wearing), the known dozen with their icons first
+              const icons = Object.fromEntries(WEAR); const known = WEAR.map(([c]) => c);
+              const cats = [...known.filter((c) => wearing[c]?.worn), ...Object.keys(wearing).filter((c) => wearing[c]?.worn && !known.includes(c)).sort()];
+              const label = (c: string) => (L['ui.wear_' + c] ? t('ui.wear_' + c) : (wearLabels[c] || c));
+              const anyOn = cats.some((c) => !wearing[c].hidden), anyOff = cats.some((c) => wearing[c].hidden);
+              return <>
+                <div className="inv-wear__grid">{cats.map((c) => { const w = wearing[c]; return <button key={c} className={'inv-wear__slot' + (w.hidden ? ' is-off' : '')} title={w.hidden ? t('ui.put_on') : t('ui.take_off')} onClick={() => post('wear', { cat: c, hidden: !w.hidden })}><svg className="inv-wear__ico" viewBox="0 0 24 24"><path d={icons[c] || 'M6 4h12v16H6z'} /></svg><span className="inv-wear__name">{label(c)}</span></button>; })}
+                  {!cats.length && <span className="inv-wear__none lxr-mono">{t('ui.nothing_worn')}</span>}</div>
+                <div className="inv-wear__all">{anyOn && <button className="btn" onClick={() => post('wear', { all: true })}>{t('ui.undress')}</button>}{anyOff && <button className="btn" onClick={() => post('wear', { all: false })}>{t('ui.dress')}</button>}</div>
+              </>;
+            })()}
           </section>
         )}
       </section>

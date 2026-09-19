@@ -1,6 +1,8 @@
 # Changelog — lxr-inventory
 
 ## 3.0.0 — 2026-09-19
+* *What you wear* lists every piece the character actually wears (lxr-clothing's `Wearing()`, labels from its catalogue) — click a piece to take it off / put it back, **Undress** / **Dress** for the whole outfit.
+* A rejected move always tells the player why (no session, invalid target, amount) — nothing is dropped silently.
 * LXRCore v3 release line: every resource ships as 3.0.0 from here (the entries below are the road to it).
 
 ## 3.1.1 — 2026-09-19

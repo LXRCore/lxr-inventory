@@ -52,9 +52,14 @@ local function requestOpen()
 end
 
 -- what the character wears, for the centre panel (from the appearance engine when it runs)
+local wearLabels = nil
 local function wearing()
     if GetResourceState('lxr-clothing') ~= 'started' then return nil end
     local ok, w = pcall(function() return exports['lxr-clothing']:Wearing() end)
+    if ok and w and not wearLabels then
+        local ok2, b = pcall(function() return exports['lxr-clothing']:Labels() end)
+        if ok2 and type(b) == 'table' then wearLabels = {} for k, v in pairs(b) do if k:sub(1, 7) == 'ui.cat_' then wearLabels[k:sub(8)] = v end end end
+    end
     return ok and w or nil
 end
 
@@ -63,7 +68,7 @@ RegisterNetEvent('lxr-inventory:client:open', function(player, other, anchor)
     progressActive = false
     sessionAnchor = anchor
     SetNuiFocus(true, true)
-    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), lang = Config.Lang, hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand, wearing = wearing(), images = 'images/' })
+    SendNUIMessage({ action = 'open', player = player, other = other, locale = Lang.bundle(), lang = Config.Lang, hotbar = Config.Keys.hotbarSlots, brand = LXRCore.Brand, wearing = wearing(), wearLabels = wearLabels, images = 'images/' })
 end)
 
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -197,8 +202,9 @@ end)
 RegisterNUICallback('wear', function(data, cb)
     cb({})
     if not isOpen or type(data) ~= 'table' or GetResourceState('lxr-clothing') ~= 'started' then return end
-    pcall(function() exports['lxr-clothing']:ToggleCategory(data.cat, data.hidden and true or false) end)
-    SendNUIMessage({ action = 'update', wearing = wearing() })
+    if data.all ~= nil then pcall(function() exports['lxr-clothing']:ToggleAll(data.all and true or false) end)   -- undress / dress everything
+    else pcall(function() exports['lxr-clothing']:ToggleCategory(data.cat, data.hidden and true or false) end) end
+    SendNUIMessage({ action = 'update', wearing = wearing(), wearLabels = wearLabels })
 end)
 
 RegisterNUICallback('give', function(data, cb)

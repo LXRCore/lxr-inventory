@@ -430,7 +430,8 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
     if limited(src) then return end
     local Player = LXRCore.Functions.GetPlayer(src)
     local s = sessions[src]
-    if not Player or not s then return end
+    if not Player then return end
+    if not s then return notify(src, 'error.no_session') end   -- the page is up but the server has no session: reopen
     if blocked(src, Player, false) then return end
     if s.anchor and distanceTo(src, s.anchor) > (s.range or Config.General.sessionRange) then
         close(src)
@@ -453,9 +454,9 @@ RegisterNetEvent('lxr-inventory:server:move', function(fromKind, toKind, fromSlo
         return nil
     end
     local from, to = pick(fromKind), pick(toKind)
-    if not from or not to then return end
+    if not from or not to then return notify(src, 'error.invalid') end
     amount = tonumber(amount)
-    if amount and amount > Config.Security.maxMoveAmount then return end
+    if amount and amount > Config.Security.maxMoveAmount then return notify(src, 'error.invalid_amount') end
 
     -- shops: buying only, player → shop is not allowed
     if to.kind == 'shop' then return notify(src, 'error.cannot_store_here') end
